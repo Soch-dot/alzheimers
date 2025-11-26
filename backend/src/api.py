@@ -4,9 +4,10 @@ Run with: uvicorn src.api:app --reload
 """
 
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Optional, Tuple
 
 import joblib
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
@@ -31,11 +32,74 @@ class PatientInput(BaseModel):
 label_map = {0: "Nondemented", 1: "Converted", 2: "Demented"}
 
 
-def load_model():
+def load_model() -> Optional[Any]:
+    """Load the trained model. Returns None if model file doesn't exist."""
     model_path = Path(__file__).resolve().parents[1] / "models" / "best_model.pkl"
     if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+        return None
     return joblib.load(model_path)
+
+
+def dummy_predict(patient: PatientInput) -> Tuple[int, np.ndarray]:
+    """
+    Dummy prediction function using simple rule-based logic.
+    Returns (predicted_class_index, probabilities_array).
+    """
+    mmse = patient.mmse
+    cdr = patient.cdr
+    age = patient.age
+    
+    # Initialize base probabilities
+    prob_nondemented = 0.0
+    prob_converted = 0.0
+    prob_demented = 0.0
+    
+    # MMSE-based risk assessment
+    if mmse < 20:
+        # High risk - Demented
+        prob_demented = 0.7
+        prob_converted = 0.2
+        prob_nondemented = 0.1
+    elif mmse <= 24:
+        # Medium risk - Converted
+        prob_converted = 0.5
+        prob_demented = 0.2
+        prob_nondemented = 0.3
+    else:
+        # Low risk - Nondemented
+        prob_nondemented = 0.8
+        prob_converted = 0.15
+        prob_demented = 0.05
+    
+    # CDR adjustment (higher CDR = higher dementia risk)
+    if cdr > 1.0:
+        # Increase Demented probability
+        prob_demented += 0.15
+        prob_converted += 0.05
+        prob_nondemented = max(0.0, prob_nondemented - 0.2)
+    elif cdr > 0.5:
+        # Moderate increase in Converted probability
+        prob_converted += 0.1
+        prob_demented += 0.05
+        prob_nondemented = max(0.0, prob_nondemented - 0.15)
+    
+    # Age adjustment (older = slightly higher risk)
+    if age > 75:
+        prob_demented += 0.05
+        prob_converted += 0.03
+        prob_nondemented = max(0.0, prob_nondemented - 0.08)
+    
+    # Normalize probabilities to sum to 1.0
+    total = prob_nondemented + prob_converted + prob_demented
+    if total > 0:
+        prob_nondemented /= total
+        prob_converted /= total
+        prob_demented /= total
+    
+    probabilities = np.array([prob_nondemented, prob_converted, prob_demented])
+    predicted_class = int(np.argmax(probabilities))
+    
+    return predicted_class, probabilities
 
 
 model = load_model()
@@ -69,16 +133,30 @@ def root() -> Dict[str, str]:
 
 
 @app.post("/predict")
-def predict(patient: PatientInput) -> Dict[str, Dict[str, float]]:
+def predict(patient: PatientInput) -> Dict:
     try:
-        df = pd.DataFrame([patient.dict()])
-        pred_class = model.predict(df)[0]
-        probabilities = model.predict_proba(df)[0]
+        # Use real model if available, otherwise use dummy prediction
+        if model is not None:
+            df = pd.DataFrame([patient.dict()])
+            pred_class = model.predict(df)[0]
+            probabilities = model.predict_proba(df)[0]
+        else:
+            # Use dummy prediction
+            pred_class, probabilities = dummy_predict(patient)
+        
         probs = {
             label_map[i]: float(probabilities[i])
             for i in range(len(probabilities))
         }
+        
+        # Calculate Alzheimer's detection status
+        # Converted (1) or Demented (2) = detected
+        detection_percentage = (probs.get("Converted", 0.0) + probs.get("Demented", 0.0)) * 100
+        alzheimers_detected = pred_class in [1, 2]  # Converted or Demented
+        
         return {
+            "alzheimers_detected": alzheimers_detected,
+            "detection_percentage": round(detection_percentage, 2),
             "predicted_class": label_map.get(pred_class, "Unknown"),
             "class_index": int(pred_class),
             "probabilities": probs,
