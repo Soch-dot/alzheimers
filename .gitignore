@@ -1,0 +1,46 @@
+############################################
+# Root .gitignore for alzheimers_ml_project
+############################################
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*.orig
+*.bak
+.idea/
+.vscode/
+
+# Python cache (in any subdir)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Env / secrets (generic)
+.env
+.env.*
+!.env.example
+
+# Common data artifacts (kept narrow; adjust as needed)
+*.sqlite3
+*.db
+*.tar
+*.tar.gz
+*.zip
+*.gz
+
+# Ignore backend virtual environment (top-level)
+backend/venv/
+
+# Ignore frontend dependencies and build artifacts (top-level)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+
