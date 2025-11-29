@@ -3,7 +3,6 @@ Train several ML models on the cleaned dataset and save the best one.
 Run with: python src/train_models.py
 """
 
-import json
 from pathlib import Path
 from typing import Dict
 
@@ -36,11 +35,15 @@ def load_data() -> pd.DataFrame:
 def build_models() -> Dict[str, Pipeline]:
     scaler = ("scaler", StandardScaler())
     models = {
-        "logistic_regression": LogisticRegression(max_iter=1000),
-        "random_forest": RandomForestClassifier(
-            n_estimators=200, random_state=42
+        "logistic_regression": LogisticRegression(
+            max_iter=1000, class_weight="balanced", random_state=42
         ),
-        "svm": SVC(kernel="rbf", probability=True, random_state=42),
+        "random_forest": RandomForestClassifier(
+            n_estimators=200, class_weight="balanced", random_state=42
+        ),
+        "svm": SVC(
+            kernel="rbf", probability=True, class_weight="balanced", random_state=42
+        ),
     }
     pipelines = {
         name: Pipeline([scaler, ("clf", model)]) for name, model in models.items()
@@ -99,12 +102,6 @@ def train():
     model_path = models_dir / "best_model.pkl"
     joblib.dump(best_pipeline, model_path)
     print("Saved best model to:", model_path)
-
-    metrics_path = models_dir / "metrics.json"
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
-    print("Saved metrics to:", metrics_path)
-
 
 if __name__ == "__main__":
     train()
