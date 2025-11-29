@@ -137,7 +137,35 @@ def predict(patient: PatientInput) -> Dict:
     try:
         # Use real model if available, otherwise use dummy prediction
         if model is not None:
-            df = pd.DataFrame([patient.dict()])
+            # Extract CLINICAL FEATURES ONLY (matching training)
+            clinical_data = {
+                "age": patient.age,
+                "sex": patient.sex,
+                "education_years": patient.education_years,
+                "mmse": patient.mmse,
+                "cdr": patient.cdr,
+                "ses": patient.ses,
+            }
+            
+            # Feature engineering (same as training)
+            import pandas as pd
+            df_temp = pd.DataFrame([clinical_data])
+            
+            # Age groups
+            age_group = pd.cut([patient.age], bins=[0, 70, 75, 80, 85, 100], labels=[0, 1, 2, 3, 4])[0]
+            if pd.isna(age_group):
+                age_group = 2
+            clinical_data["age_group"] = int(age_group)
+            
+            # MMSE categories
+            mmse_cat = pd.cut([patient.mmse], bins=[0, 17, 23, 30], labels=[0, 1, 2])[0]
+            if pd.isna(mmse_cat):
+                mmse_cat = 1
+            clinical_data["mmse_category"] = int(mmse_cat)
+            
+            # Create DataFrame with correct feature order
+            df = pd.DataFrame([clinical_data])
+            
             pred_class = model.predict(df)[0]
             probabilities = model.predict_proba(df)[0]
         else:

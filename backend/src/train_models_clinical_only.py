@@ -1,8 +1,7 @@
 """
-Train several ML models on the cleaned dataset and save the best one.
-Uses CLINICAL FEATURES ONLY (age, sex, education_years, mmse) for now.
-MRI features will be added in future updates.
-Run with: python src/train_models.py
+Train models using CLINICAL FEATURES ONLY on ORIGINAL dataset.
+This gives us the best accuracy for the prototype.
+Run with: python src/train_models_clinical_only.py
 """
 
 from pathlib import Path
@@ -26,21 +25,20 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 
-# Try to import XGBoost, use fallback if not available
+# Try to import XGBoost
 try:
     from xgboost import XGBClassifier
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
-    print("Warning: XGBoost not available. Install with: pip install xgboost")
 
 
-def load_data() -> pd.DataFrame:
+def load_original_data() -> pd.DataFrame:
     """Load and prepare ORIGINAL dataset with clinical features only."""
     base_dir = Path(__file__).resolve().parents[1]
     raw_path = base_dir / "data" / "raw" / "Dataset.csv"
     
-    print("Loading ORIGINAL dataset (clinical features only) from:", raw_path)
+    print("Loading ORIGINAL dataset (not merged) from:", raw_path)
     df = pd.read_csv(raw_path)
     
     # Rename columns
@@ -138,14 +136,12 @@ def evaluate_model(y_true, y_pred, y_prob):
         "precision_macro": precision_score(y_true, y_pred, average="macro"),
         "recall_macro": recall_score(y_true, y_pred, average="macro"),
         "f1_macro": f1_score(y_true, y_pred, average="macro"),
-        "roc_auc_ovr": roc_auc_score(
-            y_true, y_prob, multi_class="ovr"
-        ),
+        "roc_auc_ovr": roc_auc_score(y_true, y_prob, multi_class="ovr"),
     }
 
 
 def train():
-    df = load_data()
+    df = load_original_data()
     X = df.drop(columns=["group"])
     y = df["group"]
 
@@ -185,6 +181,7 @@ def train():
     model_path = models_dir / "best_model.pkl"
     joblib.dump(best_pipeline, model_path)
     print(f"\nSaved best model to: {model_path}")
+
 
 if __name__ == "__main__":
     train()
