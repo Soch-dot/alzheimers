@@ -132,6 +132,101 @@
         "nwbv": 0.67,
         "asf": 1.25
       }
+    },
+    {
+      "name": "High MMSE, Clear Dementia Signs",
+      "description": "Looks cognitively okay on MMSE but clinically impaired",
+      "expected": "Demented",
+      "data": {
+        "visit": 2,
+        "mr_delay": 12,
+        "sex": 1,
+        "hand": 1,
+        "age": 79,
+        "education_years": 18,
+        "ses": 4.0,
+        "mmse": 26.0,
+        "cdr": 1.0,
+        "etiv": 1340,
+        "nwbv": 0.62,
+        "asf": 1.12
+      }
+    },
+    {
+      "name": "Low Education, Low MMSE, Not Dementia",
+      "description": "MMSE looks bad but it's due to low education",
+      "expected": "Nondemented",
+      "data": {
+        "visit": 1,
+        "mr_delay": 0,
+        "sex": 0,
+        "hand": 1,
+        "age": 70,
+        "education_years": 5,
+        "ses": 2.0,
+        "mmse": 20.0,
+        "cdr": 0.0,
+        "etiv": 1510,
+        "nwbv": 0.80,
+        "asf": 1.30
+      }
+    },
+    {
+      "name": "High Volume, Early Clinical Decline",
+      "description": "Brain structure seems okay but behavior suggests early issues",
+      "expected": "Converted",
+      "data": {
+        "visit": 1,
+        "mr_delay": 0,
+        "sex": 1,
+        "hand": 1,
+        "age": 58,
+        "education_years": 15,
+        "ses": 3.0,
+        "mmse": 27.0,
+        "cdr": 0.5,
+        "etiv": 1600,
+        "nwbv": 0.82,
+        "asf": 1.18
+      }
+    },
+    {
+      "name": "Old Age, Low Brain Volume, Stable Cognition",
+      "description": "Severe atrophy but cognition surprisingly intact",
+      "expected": "Nondemented",
+      "data": {
+        "visit": 3,
+        "mr_delay": 24,
+        "sex": 0,
+        "hand": 1,
+        "age": 91,
+        "education_years": 12,
+        "ses": 2.0,
+        "mmse": 25.0,
+        "cdr": 0.0,
+        "etiv": 1200,
+        "nwbv": 0.59,
+        "asf": 1.05
+      }
+    },
+    {
+      "name": "Normal Metrics, Behavioral Dementia",
+      "description": "Metrics look healthy but CDR suggests functional decline",
+      "expected": "Demented",
+      "data": {
+        "visit": 1,
+        "mr_delay": 0,
+        "sex": 1,
+        "hand": 1,
+        "age": 67,
+        "education_years": 16,
+        "ses": 4.0,
+        "mmse": 28.0,
+        "cdr": 1.0,
+        "etiv": 1505,
+        "nwbv": 0.79,
+        "asf": 1.21
+      }
     }
   ]
 }
