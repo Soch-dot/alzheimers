@@ -1,79 +1,27 @@
-############################################
-# Backend (.gitignore) - Python / FastAPI
-############################################
-
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
 venv/
-.venv/
 env/
-.env/
 ENV/
+.venv
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints/
-
-# PyCharm / VSCode / IDEs
-.idea/
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# Logs
-*.log
-
-# Data artifacts (keep only raw/processed checked in if desired)
-data/**/*.tmp
-data/**/*.log
-
-# Models / large binaries (adjust if you want to version them)
-models/*.pkl
-models/*.joblib
-
-# Environment / secrets
+# Environment
 .env
-.env.*
-!.env.example
+.env.local
 
+# Models (if too large for git)
+# models/*.pkl
 
+# OS
+.DS_Store
+Thumbs.db
