@@ -8,7 +8,6 @@ export interface PatientInput {
   sex: number; // 1 = Male, 0 = Female
   education_years: number;
   mmse: number;
-  cdr: number;
   ses: number;
 }
 
@@ -31,7 +30,7 @@ export const predictAlzheimers = async (data: PatientInput): Promise<PredictionR
   console.log('=== FRONTEND PAYLOAD ===');
   console.log('Sending to API:', JSON.stringify(data, null, 2));
   console.log('Payload keys:', Object.keys(data));
-  console.log('Payload order: age, sex, education_years, mmse, cdr, ses');
+  console.log('Payload order: age, sex, education_years, mmse, ses');
   console.log('========================');
   
   const response = await axios.post<PredictionResponse>(`${API_BASE_URL}/predict`, data);

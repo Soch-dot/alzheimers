@@ -1,0 +1,68 @@
+{
+  "run_date": "2026-06-25",
+  "dataset_path": "backend/data/raw/Dataset.csv",
+  "dataset_shape": {
+    "rows": 373,
+    "columns": 15
+  },
+  "features": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "removed_features": [
+    {
+      "name": "cdr",
+      "reason": "Potential target leakage: Clinical Dementia Rating is too close to diagnosis."
+    }
+  ],
+  "model": "RandomForestClassifier",
+  "test_size": 0.2,
+  "random_state": 42,
+  "stratified_split": true,
+  "class_mapping": {
+    "0": "Nondemented",
+    "1": "Converted",
+    "2": "Demented"
+  },
+  "accuracy": 0.76,
+  "macro_avg": {
+    "precision": 0.86,
+    "recall": 0.62,
+    "f1_score": 0.65,
+    "support": 75
+  },
+  "weighted_avg": {
+    "precision": 0.80,
+    "recall": 0.76,
+    "f1_score": 0.74,
+    "support": 75
+  },
+  "per_class": {
+    "0": {
+      "precision": 0.71,
+      "recall": 0.95,
+      "f1_score": 0.81,
+      "support": 38
+    },
+    "1": {
+      "precision": 1.00,
+      "recall": 0.25,
+      "f1_score": 0.40,
+      "support": 8
+    },
+    "2": {
+      "precision": 0.86,
+      "recall": 0.66,
+      "f1_score": 0.75,
+      "support": 29
+    }
+  },
+  "notes": [
+    "Post-CDR-removal performance dropped substantially versus prior benchmark metrics, which is expected if CDR was leaking diagnosis information.",
+    "Converted class recall is weak at 0.25 on only 8 test examples, so this model is not clinically reliable for conversion screening yet.",
+    "Current pipeline still includes StandardScaler before RandomForestClassifier; this is unnecessary for Random Forest and should be cleaned in a later task."
+  ]
+}

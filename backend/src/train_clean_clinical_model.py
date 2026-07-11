@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 def load_data():
     base = Path(__file__).resolve().parents[1]
-    df = pd.read_csv(base / "data/raw/Dataset.csv")
+    df = pd.read_csv(r"D:\WebUI\cursor\alzheimers_ml_project\backend\data\raw\Dataset.csv")
 
     df = df.rename(columns={
         "Age": "age",
@@ -29,7 +29,7 @@ def load_data():
     df["sex"] = df["sex"].map({"M": 1, "F": 0})
     df["group"] = df["group"].map({"Nondemented": 0, "Converted": 1, "Demented": 2})
 
-    df = df[["age", "sex", "education_years", "mmse", "cdr", "ses", "group"]]
+    df = df[["age", "sex", "education_years", "mmse", "ses", "group"]]
     df = df.fillna(df.median())
 
     return df

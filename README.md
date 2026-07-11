@@ -9,7 +9,6 @@ Alzheimer’s disease is often diagnosed late, after noticeable cognitive declin
 The goal of this project is to explore whether a simple model, trained only on basic clinical features, can help flag patients who may have a higher probability of dementia and should receive more detailed evaluation.
 
 The project is designed to look and feel like a compact research project that could be used in a college course or capstone.
-
 ---
 
 ## Dataset

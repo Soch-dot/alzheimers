@@ -19,7 +19,6 @@ function App() {
     sex: 1,
     education_years: 12,
     mmse: 28,
-    cdr: 0,
     ses: 2,
   });
 
@@ -46,7 +45,6 @@ function App() {
         sex: formData.sex,
         education_years: formData.education_years,
         mmse: formData.mmse,
-        cdr: formData.cdr,
         ses: formData.ses,
       };
 
@@ -112,18 +110,6 @@ function App() {
                   max={30}
                   required
                   hint="Range: 0-30"
-                />
-
-                <InputField
-                  label="CDR Score"
-                  name="cdr"
-                  value={formData.cdr}
-                  onChange={handleChange}
-                  min={0}
-                  max={2}
-                  step={0.5}
-                  required
-                  hint="Range: 0-2"
                 />
 
                 <InputField
