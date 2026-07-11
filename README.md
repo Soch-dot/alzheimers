@@ -93,7 +93,6 @@ alzheimers_ml_project/
     ├── tailwind.config.js
     ├── tsconfig.json
     └── vite.config.ts
-
 ​```
 
 ## Backend: FastAPI service
