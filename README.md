@@ -60,6 +60,8 @@ The trained model is saved as `best_model.pkl` under `backend/models/`. The Fast
 ---
 
 ## Project structure
+
+​```
 alzheimers_ml_project/
 ├── README.md
 ├── backend/
@@ -75,23 +77,23 @@ alzheimers_ml_project/
 │       ├── api.py
 │       └── train_clean_clinical_model.py
 └── frontend/
-├── index.html
-├── package.json
-├── package-lock.json
-├── postcss.config.js
-├── public/
-│   └── vite.svg
-├── src/
-│   ├── api.ts
-│   ├── App.tsx
-│   ├── components/
-│   ├── main.ts
-│   ├── main.tsx
-│   └── style.css
-├── tailwind.config.js
-├── tsconfig.json
-└── vite.config.ts
----
+    ├── index.html
+    ├── package.json
+    ├── package-lock.json
+    ├── postcss.config.js
+    ├── public/
+    │   └── vite.svg
+    ├── src/
+    │   ├── api.ts
+    │   ├── App.tsx
+    │   ├── components/
+    │   ├── main.ts
+    │   ├── main.tsx
+    │   └── style.css
+    ├── tailwind.config.js
+    ├── tsconfig.json
+    └── vite.config.ts
+​```
 
 ## Backend: FastAPI service
 
