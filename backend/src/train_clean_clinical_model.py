@@ -1,10 +1,12 @@
-"""
-Clean 6-feature clinical model training
+﻿"""
+Clean 5-feature clinical model training
 """
 
 from pathlib import Path
 import joblib
 import pandas as pd
+import matplotlib.pyplot as plt
+import shap
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
@@ -66,7 +68,64 @@ def train():
     joblib.dump(model, out)
     print("\nSaved:", out)
 
+    generate_shap_explanation(model, X_test, base)
+
+
+def generate_shap_explanation(model, X_test, base):
+    print("\nGenerating SHAP explanations...")
+
+    scaler = model.named_steps["scaler"]
+    clf = model.named_steps["clf"]
+
+    X_test_scaled = scaler.transform(X_test)
+    X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=X_test.columns)
+
+    explainer = shap.TreeExplainer(clf)
+    shap_values = explainer.shap_values(X_test_scaled_df)
+
+    shap_dir = base / "models" / "shap"
+    shap_dir.mkdir(parents=True, exist_ok=True)
+
+    class_names = ["Nondemented", "Converted", "Demented"]
+
+    if isinstance(shap_values, list):
+        shap_values_per_class = shap_values
+    else:
+        shap_values_per_class = [shap_values[:, :, i] for i in range(shap_values.shape[2])]
+
+    plt.figure()
+    shap.summary_plot(
+        shap_values_per_class,
+        X_test_scaled_df,
+        class_names=class_names,
+        show=False
+    )
+    plt.tight_layout()
+    plt.savefig(shap_dir / "shap_summary.png", dpi=150)
+    plt.close()
+
+    for i, class_name in enumerate(class_names):
+        plt.figure()
+        shap.summary_plot(
+            shap_values_per_class[i],
+            X_test_scaled_df,
+            show=False
+        )
+        plt.title(f"SHAP summary - {class_name}")
+        plt.tight_layout()
+        plt.savefig(shap_dir / f"shap_summary_{class_name.lower()}.png", dpi=150)
+        plt.close()
+
+    joblib.dump({
+        "shap_values": shap_values,
+        "expected_value": explainer.expected_value,
+        "feature_names": list(X_test.columns),
+    }, shap_dir / "shap_data.pkl")
+
+    print(f"SHAP summary plot saved to: {shap_dir / 'shap_summary.png'}")
+    print(f"Per-class SHAP plots saved to: {shap_dir}")
+    print(f"SHAP raw values saved to: {shap_dir / 'shap_data.pkl'}")
+
 
 if __name__ == "__main__":
     train()
-
