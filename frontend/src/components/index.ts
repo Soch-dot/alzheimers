@@ -8,3 +8,5 @@ export { ResultCard } from './ResultCard';
 export { Layout } from './Layout';
 export { EmptyState } from './EmptyState';
 export { PredictionPieChart } from './PredictionPieChart';
+export { MMSEAssessment } from './mmse/MMSEAssessment';
+export { MMSESummary } from './mmse/MMSESummary';

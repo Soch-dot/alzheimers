@@ -11,6 +11,7 @@ import {
   ResultCard,
   ErrorMessage,
   EmptyState,
+  MMSEAssessment,
 } from './components';
 
 function App() {
@@ -18,10 +19,12 @@ function App() {
     age: 70,
     sex: 1,
     education_years: 12,
-    mmse: 28,
+    mmse: 0,
     ses: 2,
   });
 
+  const [phase, setPhase] = useState<'mmse' | 'form'>('mmse');
+  const [mmseScore, setMmseScore] = useState<number | null>(null);
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,32 @@ function App() {
     }));
   };
 
+  const handleMmseComplete = (score: number) => {
+    setMmseScore(score);
+    setFormData((prev) => ({
+      ...prev,
+      mmse: score,
+    }));
+    setPhase('form');
+  };
+
+  const handleRestartMmse = () => {
+    setPhase('mmse');
+    setMmseScore(null);
+    setResult(null);
+    setError(null);
+    setFormData((prev) => ({
+      ...prev,
+      mmse: 0,
+    }));
+  };
+
   const handleAnalyze = async () => {
+    if (mmseScore === null) {
+      setError('Complete the MMSE assessment before analyzing.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -82,64 +110,75 @@ function App() {
       <div className="w-full flex justify-center mt-10 px-6">
         <div className="w-full max-w-[1350px] flex flex-col lg:flex-row items-start justify-between gap-12">
 
-          {/* Left: Form */}
+          {/* Left: MMSE Assessment or Form */}
           <div className="flex-1 max-w-[520px] w-full">
-            <FormPanel onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-7">
+            {phase === 'mmse' ? (
+              <MMSEAssessment onComplete={handleMmseComplete} />
+            ) : (
+              <FormPanel onSubmit={handleSubmit}>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-7 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
+                      MMSE Score
+                    </p>
+                    <p className="text-lg font-semibold text-white mt-0.5">
+                      {formData.mmse} / 30
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRestartMmse}
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    Re-take Assessment
+                  </button>
+                </div>
 
-                <InputField label="Age" name="age" value={formData.age} onChange={handleChange} min={50} max={100} required />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-7">
 
-                <SelectField
-                  label="Gender"
-                  name="sex"
-                  value={formData.sex}
-                  onChange={handleChange}
-                  options={[
-                    { value: 1, label: 'Male' },
-                    { value: 0, label: 'Female' },
-                  ]}
-                  required
-                />
+                  <InputField label="Age" name="age" value={formData.age} onChange={handleChange} min={50} max={100} required />
 
-                <InputField
-                  label="MMSE Score"
-                  name="mmse"
-                  value={formData.mmse}
-                  onChange={handleChange}
-                  min={0}
-                  max={30}
-                  required
-                  hint="Range: 0-30"
-                />
+                  <SelectField
+                    label="Gender"
+                    name="sex"
+                    value={formData.sex}
+                    onChange={handleChange}
+                    options={[
+                      { value: 1, label: 'Male' },
+                      { value: 0, label: 'Female' },
+                    ]}
+                    required
+                  />
 
-                <InputField
-                  label="Education"
-                  name="education_years"
-                  value={formData.education_years}
-                  onChange={handleChange}
-                  min={0}
-                  max={25}
-                  required
-                  hint="Years"
-                />
+                  <InputField
+                    label="Education"
+                    name="education_years"
+                    value={formData.education_years}
+                    onChange={handleChange}
+                    min={0}
+                    max={25}
+                    required
+                    hint="Years"
+                  />
 
-                <InputField
-                  label="SES"
-                  name="ses"
-                  value={formData.ses}
-                  onChange={handleChange}
-                  min={1}
-                  max={5}
-                  required
-                  hint="Range: 1-5"
-                />
+                  <InputField
+                    label="SES"
+                    name="ses"
+                    value={formData.ses}
+                    onChange={handleChange}
+                    min={1}
+                    max={5}
+                    required
+                    hint="Range: 1-5"
+                  />
 
-              </div>
+                </div>
 
-              <div className="pt-12 border-t border-white/10">
-                <AnalyzeButton onClick={handleAnalyze} loading={loading} />
-              </div>
-            </FormPanel>
+                <div className="pt-12 border-t border-white/10">
+                  <AnalyzeButton onClick={handleAnalyze} loading={loading} />
+                </div>
+              </FormPanel>
+            )}
           </div>
 
           {/* Right: Results */}
