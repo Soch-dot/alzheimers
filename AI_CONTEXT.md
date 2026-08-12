@@ -318,8 +318,8 @@ alzheimers_ml_project/
 | 2026-07-11 | `460f777` | Removed CDR from frontend | Data-leakage fix (5 features) |
 | 2026-07-11 | `4055df3` | README: 5 features, RF, metrics, CDR note | Doc accuracy |
 | 2026-07-11 | `f4fab7b` | SHAP multiclass fix + per-class plots | Correct SHAP artifacts |
-| 2026-08-13 | *(see handoff)* | `feat(mmse): ...` | MMSE questionnaire implementation |
-| 2026-08-13 | *(see handoff)* | `docs: ...` | AI_CONTEXT.md milestone |
+| 2026-08-13 | `590ff38` | `feat(mmse): add step-by-step MMSE assessment with examiner scoring` | MMSE questionnaire implementation |
+| 2026-08-13 | `c97ba47` | `docs: add AI_CONTEXT.md for agent context management` | AI_CONTEXT.md milestone |
 
 ---
 
@@ -370,10 +370,11 @@ alzheimers_ml_project/
 - No backend tests exist; backend left untouched.
 
 ### Commit
-- See the two commits created for this milestone (MMSE feature + AI_CONTEXT docs).
+- `590ff38` — `feat(mmse): add step-by-step MMSE assessment with examiner scoring` (11 files, +1481/−59)
+- `c97ba47` — `docs: add AI_CONTEXT.md for agent context management`
 
 ### Push Status
-- Push to `origin/main` status recorded at the end of the MMSE milestone session.
+- Pushed to `origin/main` successfully. `main` is up to date with `origin/main`; working tree clean.
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
