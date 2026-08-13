@@ -8,12 +8,20 @@ from typing import Any, Dict, Optional
 import os
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Response
+import base64
+import json
+from fastapi import FastAPI, HTTPException, Response, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 # AI-assisted MMSE evaluation service (provider-agnostic; does not touch /predict).
 from src.ai_eval import MMSEEvaluateRequest, evaluate_mmse_batch
+# MMSE Question 11 vision-assisted figure copying evaluation.
+from src.vision_eval import (
+    VisionProviderError,
+    VisionImageError,
+    evaluate_copying_image,
+)
 
 # ------------------------------------
 # Input Schema (5 FIELDS - CDR REMOVED: data leakage)
@@ -85,6 +93,64 @@ def options_predict() -> Response:
 @app.post("/mmse/evaluate")
 def mmse_evaluate(req: MMSEEvaluateRequest) -> Dict:
     return evaluate_mmse_batch(req)
+
+
+# ------------------------------------
+# MMSE Question 11 — vision-assisted figure copying (separate service;
+# /predict and /mmse/evaluate contracts unchanged)
+# ------------------------------------
+@app.post("/mmse/copying/evaluate")
+async def mmse_copying_evaluate(request: Request) -> Dict:
+    """
+    Evaluate a patient's copy of the MMSE figure against the trusted
+    server-side reference. The patient drawing is supplied as the raw request
+    body (Content-Type: image/jpeg|png|webp) or as JSON:
+        {"image": "data:image/jpeg;base64,..."}
+    The reference figure is always loaded server-side from the trusted asset.
+    Patient images are processed in memory and never persisted.
+    """
+    content_type = request.headers.get("content-type", "")
+    raw_body = await request.body()
+    if not raw_body:
+        raise HTTPException(status_code=400, detail="No image was provided.")
+
+    image_bytes = raw_body
+    mime = content_type
+    if content_type.lower().startswith("application/json"):
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON body.") from exc
+        image_field = payload.get("image", "")
+        if not isinstance(image_field, str) or not image_field.strip():
+            raise HTTPException(status_code=400, detail="No image was provided.")
+        if "," in image_field and image_field.strip().startswith("data:"):
+            header, _, b64 = image_field.strip().partition(",")
+            mime = header.removeprefix("data:").split(";")[0]
+        else:
+            b64 = image_field
+            mime = "image/jpeg"
+        try:
+            image_bytes = base64.b64decode(b64)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise HTTPException(status_code=400, detail="Invalid image data.") from exc
+
+    try:
+        return evaluate_copying_image(image_bytes, mime)
+    except VisionImageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except VisionProviderError as exc:
+        if exc.kind == "timeout":
+            raise HTTPException(
+                status_code=504, detail="Vision assessment timed out."
+            ) from exc
+        if exc.kind == "invalid":
+            raise HTTPException(
+                status_code=502, detail="Vision assessment returned an invalid result."
+            ) from exc
+        raise HTTPException(
+            status_code=503, detail="Vision assessment unavailable."
+        ) from exc
 
 @app.get("/")
 def root() -> Dict[str, str]:
