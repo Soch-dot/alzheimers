@@ -5,12 +5,11 @@ import { predictAlzheimers } from './api';
 import {
   Layout,
   FormPanel,
-  InputField,
-  SelectField,
   AnalyzeButton,
   ResultCard,
   ErrorMessage,
   EmptyState,
+  AssessmentDetails,
   MMSEAssessment,
 } from './components';
 
@@ -23,7 +22,7 @@ function App() {
     ses: 2,
   });
 
-  const [phase, setPhase] = useState<'mmse' | 'form'>('mmse');
+  const [phase, setPhase] = useState<'details' | 'mmse' | 'form'>('details');
   const [mmseScore, setMmseScore] = useState<number | null>(null);
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,15 +45,18 @@ function App() {
     setPhase('form');
   };
 
-  const handleRestartMmse = () => {
-    setPhase('mmse');
+  const handleRestart = () => {
+    setPhase('details');
     setMmseScore(null);
     setResult(null);
     setError(null);
-    setFormData((prev) => ({
-      ...prev,
+    setFormData({
+      age: 70,
+      sex: 1,
+      education_years: 12,
       mmse: 0,
-    }));
+      ses: 2,
+    });
   };
 
   const handleAnalyze = async () => {
@@ -94,6 +96,15 @@ function App() {
     handleAnalyze();
   };
 
+  const detailsValid =
+    formData.age >= 50 &&
+    formData.age <= 100 &&
+    (formData.sex === 0 || formData.sex === 1) &&
+    formData.education_years >= 0 &&
+    formData.education_years <= 25 &&
+    formData.ses >= 1 &&
+    formData.ses <= 5;
+
   return (
     <Layout>
 
@@ -110,9 +121,15 @@ function App() {
       <div className="w-full flex justify-center mt-10 px-6">
         <div className="w-full max-w-[1350px] flex flex-col lg:flex-row items-start justify-between gap-12">
 
-          {/* Left: MMSE Assessment or Form */}
+          {/* Left: Assessment Details, MMSE Assessment, or Analysis */}
           <div className="flex-1 max-w-[520px] w-full">
-            {phase === 'mmse' ? (
+            {phase === 'details' ? (
+              <AssessmentDetails
+                formData={formData}
+                onChange={handleChange}
+                onContinue={() => setPhase('mmse')}
+              />
+            ) : phase === 'mmse' ? (
               <MMSEAssessment onComplete={handleMmseComplete} />
             ) : (
               <FormPanel onSubmit={handleSubmit}>
@@ -127,55 +144,43 @@ function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleRestartMmse}
+                    onClick={handleRestart}
                     className="text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     Re-take Assessment
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-7">
-
-                  <InputField label="Age" name="age" value={formData.age} onChange={handleChange} min={50} max={100} required />
-
-                  <SelectField
-                    label="Gender"
-                    name="sex"
-                    value={formData.sex}
-                    onChange={handleChange}
-                    options={[
-                      { value: 1, label: 'Male' },
-                      { value: 0, label: 'Female' },
-                    ]}
-                    required
-                  />
-
-                  <InputField
-                    label="Education"
-                    name="education_years"
-                    value={formData.education_years}
-                    onChange={handleChange}
-                    min={0}
-                    max={25}
-                    required
-                    hint="Years"
-                  />
-
-                  <InputField
-                    label="SES"
-                    name="ses"
-                    value={formData.ses}
-                    onChange={handleChange}
-                    min={1}
-                    max={5}
-                    required
-                    hint="Range: 1-5"
-                  />
-
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-7">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em] mb-3">
+                    Assessment Details
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-gray-400">Age</span>
+                      <span className="text-sm font-semibold text-white">{formData.age}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-gray-400">Sex</span>
+                      <span className="text-sm font-semibold text-white">
+                        {formData.sex === 1 ? 'Male' : 'Female'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-gray-400">Education</span>
+                      <span className="text-sm font-semibold text-white">
+                        {formData.education_years} years
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-gray-400">SES</span>
+                      <span className="text-sm font-semibold text-white">{formData.ses}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-12 border-t border-white/10">
-                  <AnalyzeButton onClick={handleAnalyze} loading={loading} />
+                  <AnalyzeButton onClick={handleAnalyze} loading={loading} disabled={!detailsValid} />
                 </div>
               </FormPanel>
             )}
@@ -194,6 +199,19 @@ function App() {
               </motion.div>
             ) : result ? (
               <ResultCard result={result} />
+            ) : phase === 'details' ? (
+              <EmptyState
+                onAnalyze={handleAnalyze}
+                loading={loading}
+                title="Assessment Details"
+                description={
+                  <>
+                    Enter the patient&apos;s assessment details to begin the
+                    screening.
+                  </>
+                }
+                showAnalyze={false}
+              />
             ) : phase === 'mmse' ? (
               <EmptyState
                 onAnalyze={handleAnalyze}
