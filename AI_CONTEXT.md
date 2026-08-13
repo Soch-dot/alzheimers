@@ -65,8 +65,9 @@
 ### Backend
 - **Framework:** FastAPI 0.121 + Pydantic v2 + Uvicorn.
 - **Entry point:** `backend/src/api.py` (`uvicorn src.api:app`).
-- **Routes:** `GET /` (health message), `POST /predict` (prediction), `POST /mmse/evaluate` (AI-assisted MMSE **batch** scoring), `OPTIONS /predict` (CORS preflight).
+- **Routes:** `GET /` (health message), `POST /predict` (prediction), `POST /mmse/evaluate` (AI-assisted MMSE **batch** scoring), `POST /mmse/copying/evaluate` (Q11 vision figure-copying evaluation), `OPTIONS /predict` (CORS preflight).
 - **AI service:** `backend/src/ai_eval.py` — provider-agnostic (`AI_PROVIDER=ollama|gemini|none`), **batch** request with per-item structured JSON results, strict per-item validation, per-section prompts. **Provider-aware batching:** Ollama evaluates the WHOLE batch with a SINGLE `/api/chat` call (one prompt containing every item + its section-specific rules; one structured JSON response with one entry per item — no per-item Ollama calls, no concurrent Ollama calls). Gemini keeps per-item parallel evaluation via stdlib `concurrent.futures` (`GEMINI_MAX_CONCURRENCY=8`). Uses only Python stdlib (no new deps). No patient data logged/persisted. Backend-only secrets via env / `.env` (python-dotenv).
+- **Vision service (Q11):** `backend/src/vision_eval.py` + `backend/src/vision_image.py` — MMSE Question 11 figure-copying evaluation via `POST /mmse/copying/evaluate`. Provider abstraction built around an OpenAI-compatible multimodal `chat/completions` contract (`VISION_PROVIDER=ollama|gemini|openai`; exactly ONE provider per assessment, no voting/fallback). Shared layer owns the MMSE copying criterion prompt, normalized schema, strict validation, confidence/review, and error normalization; provider adapters only handle base URL/model/auth/payload/response extraction. `VISION_TIMEOUT` (default 60s) is separate from the text-MMSE timeouts. Images are processed in-memory with Pillow (no new deps, no multipart upload — raw binary or JSON base64 body). The trusted reference figure is loaded server-side from `frontend/public/mmse-copying-figure.png` (never from the client).
 - **Validation:** Pydantic `PatientInput` model. Note: no `min`/`max` range constraints are enforced server-side.
 - **Model loading:** `joblib.load` at import time via `load_model()`; checks `MODEL_PATH` env, then several default paths. If missing, server still starts but `/predict` returns 500.
 
@@ -103,10 +104,12 @@ alzheimers_ml_project/
 ├── README.md                         # Human-facing project doc (contains the API schema and roadmap)
 ├── requirements.txt                  # Root, unpinned, incomplete; prefer backend/requirements.txt
 ├── backend/
-│   ├── src/api.py                    # FastAPI prediction API + /mmse/evaluate (batch). /predict contract frozen.
+│   ├── src/api.py                    # FastAPI prediction API + /mmse/evaluate (batch) + /mmse/copying/evaluate (Q11 vision). /predict contract frozen.
 │   ├── src/ai_eval.py                # AI-assisted MMSE BATCH evaluation service (provider-agnostic)
-│   ├── src/train_clean_clinical_model.py  # Trains model + generates SHAP. Hardcoded absolute data path.
+│   ├── src/vision_eval.py            # Q11 vision evaluation service (provider abstraction: ollama/gemini/openai; normalized result)
+│   ├── src/vision_image.py           # Q11 image processing (validate/normalize/encode in-memory; trusted reference loader)
 │   ├── src/test_hello.py             # shap/matplotlib import smoke test
+│   ├── tests/test_vision_eval.py     # stdlib unittest: Q11 vision service (synthetic images only)
 │   ├── models/best_model.pkl         # Trained pipeline (joblib). Do not modify.
 │   ├── models/clean_clinical_metrics_after_cdr_removal.json  # Post-CDR metrics record
 │   ├── models/shap/                  # Static SHAP plots + shap_data.pkl (training-time only)
@@ -144,8 +147,11 @@ alzheimers_ml_project/
 | `frontend/src/mmse/*` | MMSE logic/config/state/batch | Allowed; keep total 0–30 and 11-section structure |
 | `frontend/src/components/mmse/*` | MMSE UI | Allowed; preserve design system |
 | `frontend/src/components/index.ts` | Barrel exports | Allowed (add exports) |
-| `backend/src/api.py` | Prediction API | `/predict` contract frozen; adding new endpoints (e.g. `/mmse/evaluate`) is allowed |
+| `backend/src/api.py` | Prediction API | `/predict` contract frozen; adding new endpoints (e.g. `/mmse/evaluate`, `/mmse/copying/evaluate`) is allowed |
 | `backend/src/ai_eval.py` | AI-assisted MMSE evaluation service | Allowed (new) |
+| `backend/src/vision_eval.py` | Q11 vision evaluation service | Allowed (new) |
+| `backend/src/vision_image.py` | Q11 image processing + trusted reference loader | Allowed (new) |
+| `backend/tests/*` | Backend tests | Allowed (add) |
 | `backend/src/train_clean_clinical_model.py` | Training + SHAP | **Do not modify without explicit instruction** |
 | `backend/models/*` | Model + SHAP artifacts | **Do not modify / retrain without explicit instruction** |
 
@@ -220,6 +226,26 @@ alzheimers_ml_project/
 - **Provider config (backend env only):** `AI_PROVIDER=ollama|gemini|none`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (default `gemma3`), `GEMINI_BASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_TIMEOUT` (per provider call, default 30s), `OLLAMA_BATCH_TIMEOUT` (single Ollama batch call, default 175s, must stay under the frontend's 180s).
 - **Frontend caller:** `evaluateMmseBatch()` in `frontend/src/api.ts` (axios timeout 180s; `isTimeoutError()` detects timeouts → "AI assessment timed out.").
 - **Disclaimers:** AI result is an assist signal, never a diagnosis. Confidence is a model signal, not clinical certainty. `AI_PROVIDER=none` or an unreachable provider surfaces "AI assessment unavailable." with Retry/Manual-review in the UI.
+
+### `POST /mmse/copying/evaluate` (Q11 vision-assisted figure copying — separate service)
+- **Purpose:** Evaluates ONLY MMSE Question 11 (figure copying). The backend loads the trusted reference figure server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`); the client NEVER supplies the reference. Patient drawing is processed in memory (Pillow) and discarded — never persisted, logged, or returned.
+- **Request:** raw image bytes with `Content-Type: image/jpeg|image/png|image/webp` **or** JSON `{"image": "data:image/jpeg;base64,..."}` (or plain base64). No multipart (python-multipart is not installed).
+- **Image handling:** validates MIME + size (`VISION_MAX_UPLOAD_BYTES`, default 10 MB), decodes via Pillow, normalizes EXIF orientation, preserves aspect ratio, downscales > `VISION_MAX_IMAGE_DIMENSION` (default 2048). Rejects: empty body, unsupported MIME, oversized, undecodable → HTTP 400 with a friendly message.
+- **Response (normalized structured result):**
+  ```json
+  {
+    "correct": true,
+    "score": 1,
+    "confidence": 0.91,
+    "reason": "Both overlapping figures are present and the required intersection is preserved.",
+    "review_required": false
+  }
+  ```
+  - `score` = 0/1 and must agree with `correct`; `confidence` in [0,1]; `reason` non-empty. Strict validation: malformed provider output → NO score, HTTP 502 "Vision assessment returned an invalid result." Low confidence (`< AI_CONFIDENCE_REVIEW_THRESHOLD`, 0.7) → `review_required: true`.
+  - Timeout (`VISION_TIMEOUT`, default 60s) → HTTP 504 "Vision assessment timed out." Provider unreachable/not configured → HTTP 503 "Vision assessment unavailable." These are separate from the text-MMSE 175/180s budgets.
+- **Provider config (backend env only):** `VISION_PROVIDER=ollama|gemini|openai`, `OLLAMA_VISION_MODEL` (default `gemma3`), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`/`GEMINI_BASE_URL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_TIMEOUT`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `COPYING_REFERENCE_PATH`.
+- **MMSE copying criterion:** geometric structure, presence of both figures, and required overlap/intersection ONLY. Explicitly NOT scored: artistic quality, handwriting, penmanship, aesthetics, paper cleanliness, color, line thickness, "looks professional". No invented clinical criteria.
+- **Frontend:** NO UI changes in the backend milestone; the camera/upload interface is a later UI/UX prompt. No frontend code consumes this endpoint yet.
 
 ---
 
@@ -345,6 +371,7 @@ alzheimers_ml_project/
 | Real-model AI scoring untested on this machine (no Ollama runtime) | Medium | Only failure/validation paths exercised live | Yes until deployed | Test with a real provider (Ollama/Gemini) before release |
 | Partial batch failure (invalid AI output / provider error for some items) | Medium | Those items stay unscored until Retry/manual | Yes (by design) | Per-item errors surfaced in UI; no silent score |
 | AI is an assist signal only — never a diagnosis or clinical certainty | Medium | Misinterpretation risk | No (must keep disclaimers) | Keep confidence phrased as model signal; examiner review required |
+| Q11 vision UI not wired (backend milestone only) | Medium | Camera/upload not available yet; Q11 stays examiner-scored | Yes until UI prompt | Implement UI/UX in a separate later prompt |
 
 ---
 
@@ -399,6 +426,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `2abab40` | `fix(mmse): sequential Ollama batch eval with 180s frontend timeout` | Provider-aware concurrency + batch timeout |
 | 2026-08-13 | `9f29276` | `fix(mmse): add exact copying figure reference asset` | Section 11 reference figure wired |
 | 2026-08-13 | `6943501` | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
+| 2026-08-13 | `4fdc6fe` | `feat(mmse): add q11 vision evaluation service` | Backend vision endpoint + provider abstraction |
 
 ---
 
@@ -409,7 +437,7 @@ alzheimers_ml_project/
 - ~~Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`).~~ **Done** — `frontend/public/mmse-copying-figure.png`, `COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png'`.
 
 ### Next
-- Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review). Do NOT fold into the current AI-text evaluation.
+- ~~Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review).~~ **Backend done** (`POST /mmse/copying/evaluate`, provider abstraction, real Ollama test). UI/UX (camera/upload → reviewer) is a separate later prompt. Do NOT fold into the text-AI evaluation.
 - Live per-patient SHAP explanations (backend endpoint + frontend consumption).
 - MoCA scoring (README V2 roadmap).
 
@@ -420,7 +448,7 @@ alzheimers_ml_project/
 
 ### Explicitly deferred
 - Any change to the ML contract (`/predict`, model, SHAP).
-- Automated figure scoring — pending the separate vision workflow.
+- Q11 vision UI/UX (camera/upload/preview/reviewer) — separate prompt after the backend milestone is verified.
 - Automated vision scoring of the Reading instruction.
 
 ---
@@ -428,6 +456,13 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Q11 vision-assisted figure copying — backend/infrastructure milestone (feat(mmse): add q11 vision evaluation service):** New dedicated endpoint `POST /mmse/copying/evaluate` for MMSE Question 11 ONLY. Frontend UI untouched (no camera/upload/preview/reviewer — those belong to a separate later UI/UX prompt). Details:
+  - **Provider abstraction (`backend/src/vision_eval.py`):** built around an OpenAI-compatible multimodal `chat/completions` contract. Exactly ONE provider runs per assessment (`VISION_PROVIDER=ollama|gemini|openai`); no voting, no auto-fallback. Shared layer owns the MMSE copying criterion prompt, normalized schema, strict validation, confidence/review, error normalization, and timeout semantics; provider adapters (`OllamaVisionProvider` via `/v1/chat/completions`, `GeminiVisionProvider`, `OpenAIVisionProvider`) only set base URL/model/auth/payload/response extraction. Config backend-only: `VISION_TIMEOUT` (default 60s — deliberately separate from the text-MMSE 175/180s budgets), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `COPYING_REFERENCE_PATH`.
+  - **Image handling (`backend/src/vision_image.py`):** in-memory only (Pillow, already pinned). Validates MIME (JPEG/PNG/WebP) + size (≤10 MB), decodes, EXIF-orients, preserves aspect ratio, downscales >2048 px, re-encodes to JPEG base64 data URLs. Patient images are NEVER persisted, logged, or returned. Upload as raw image bytes (`Content-Type: image/...`) or JSON `{"image": "data:...;base64,..."}` — no multipart (python-multipart not installed; no new deps added).
+  - **Trusted reference:** loaded server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`) — the same exact asset the frontend shows; never accepted from the client, never duplicated/regenerated.
+  - **Structured result:** `{correct, score 0/1 agreeing with correct, confidence 0–1, reason non-empty, review_required}`. Malformed provider output → NO score + HTTP 502 "Vision assessment returned an invalid result." Timeout → 504 "Vision assessment timed out." Provider unreachable/not configured → 503 "Vision assessment unavailable." Bad uploads → 400 friendly messages. Low confidence (`< AI_CONFIDENCE_REVIEW_THRESHOLD` 0.7) → `review_required: true`. Criterion: geometric structure, presence of both figures, required overlap/intersection ONLY — no aesthetics/artistic/line-thickness/cleanliness scoring, no invented clinical criteria.
+  - **Tests (`backend/tests/test_vision_eval.py`, stdlib unittest, synthetic images only):** 22 checks — valid JPEG/PNG accepted, empty/unsupported-MIME/oversized/undecodable rejected, reference loaded from trusted asset, OpenAI-compatible multimodal payload (reference + patient image_url parts), valid/malformed/missing/mismatch/out-of-range validation, low vs high confidence flagging, end-to-end score 0/1 mapping, timeout and unavailable kinds, provider selection default, `/predict` + `/mmse/evaluate` + new route present. **All pass.**
+  - **Real Ollama + Gemma 3 4B test (synthetic images only):** good copy (two overlapping figures) → `{correct: true, score: 1, confidence: 0.95, review_required: false}` in 53.7s; poor copy (single ellipse) → `{correct: false, score: 0, confidence: 0.6, review_required: true}` in 37.5s. A blank white 640×480 canvas was (incorrectly) judged correct — a real model limitation, reported honestly, NOT a claim of clinical accuracy. Gemini/OpenAI: **not live-tested because credentials are not configured**; adapters verified by unit tests (request construction, auth header, payload, error handling).
 - **Single-call Ollama batch evaluation (perf milestone):** replaced up to 30 sequential per-item Ollama `/api/chat` calls with exactly **ONE** `/api/chat` call that returns structured JSON for every AI-evaluable MMSE item at once (`backend/src/ai_eval.py`). The two-phase batch architecture and the frontend contract are unchanged — the browser still sends exactly ONE `POST /mmse/evaluate`. Details:
   - `BATCH_SYSTEM_PROMPT` + `build_batch_messages()` build a single system+user pair where each item keeps its section-specific rules (`_prompt_for`), so the one call preserves per-item semantics.
   - `_evaluate_ollama_batch()` sends one request with `OLLAMA_BATCH_TIMEOUT` (default 175s, fits under the 180s browser timeout) and validates every requested key via `parse_batch_result()`. Missing/malformed entries become per-item `errors` — never silently scored. Invalid keys / unsupported sections / empty responses are rejected server-side before the call. A flat `{key: result}` response (without the `items` wrapper) is accepted as a fallback.
@@ -450,14 +485,18 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: single-call batch changes in `backend/src/ai_eval.py` (plus this AI_CONTEXT.md) staged/pending commit; then clean. Git branch `main`, tracking `origin/main`. Copying-figure work committed and pushed (`9f29276`). Batch work `8cadbc5` (+ `e9478e7` docs), UX work `babcb03`, concurrency work `2abab40`. `npm run build` (tsc + vite) passes; single-call 30-item batch verified live against real Gemma 3 4B (~139–158s when complete; variance can exceed 175s — see warnings). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves.
+- Working tree: Q11 vision milestone (`backend/src/vision_eval.py`, `backend/src/vision_image.py`, `backend/src/api.py` endpoint, `backend/tests/test_vision_eval.py`) pending commit. Git branch `main`, tracking `origin/main`. Perf milestone `6943501` + `db0f02f` pushed. `npm run build` (tsc + vite) passes; `/predict` and `/mmse/evaluate` verified HTTP 200 against the live server; Q11 vision endpoint verified live against real Gemma 3 4B. Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves; Gemma 3 4B supports vision.
 
 ### Next Recommended Task
+- Implement the Q11 UI/UX milestone (camera/upload → preview → submit to `/mmse/copying/evaluate` → examiner review with the normalized result + `review_required`) in a SEPARATE prompt. Backend is ready and contract-documented.
 - Consider whether the local Ollama latency is acceptable for production. The full 30-item batch sits close to the 180s browser timeout on this hardware. Options to revisit deliberately (never by removing items): a larger GPU, a smaller/quantized model, streaming progress, or a split-batch strategy. Any of these needs explicit user instruction.
-- Supply/verify the exact MMSE copying figure asset and set `COPYING_REFERENCE_IMAGE` (done — figure supplied).
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
+- `backend/src/vision_eval.py` (NEW: Q11 vision provider abstraction + evaluation service)
+- `backend/src/vision_image.py` (NEW: Q11 image validation/normalization/encoding + trusted reference loader)
+- `backend/src/api.py` (`POST /mmse/copying/evaluate` endpoint; raw-binary or JSON-base64 body)
+- `backend/tests/test_vision_eval.py` (NEW: 22 stdlib-unittest checks, synthetic images only)
 - `backend/src/ai_eval.py` (single-call Ollama batch: `BATCH_SYSTEM_PROMPT`, `build_batch_messages`, `_parse_json_object`/`_validate_item`/`parse_batch_result` validation refactor, `_evaluate_ollama_batch`, provider-aware `evaluate_mmse_batch`, `OLLAMA_BATCH_TIMEOUT` env, dev-side `[ai_eval]` timing log)
 - `frontend/src/mmse/state.ts` (+`AssessmentLocation`; `MMSEState.location`)
 - `frontend/src/mmse/config.ts` (`PLACE_ITEMS` without hardcoded expected; `LOCATION_FIELDS` for the examiner location form)
@@ -472,6 +511,8 @@ alzheimers_ml_project/
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
+- **Q11 vision backend (synthetic images only):** `python -m unittest backend.tests.test_vision_eval` — 22/22 pass (image validation, reference asset, OpenAI-compatible multimodal payload, result validation, low-confidence flagging, score mapping, timeout/unavailable/invalid kinds, contracts present).
+- **Real Ollama + Gemma 3 4B Q11 vision test:** good synthetic copy → `{correct: true, score: 1, confidence: 0.95, review_required: false}` (53.7s); poor synthetic copy (single figure) → `{correct: false, score: 0, confidence: 0.6, review_required: true}` (37.5s). Blank-canvas false-positive observed and reported honestly. Gemini/OpenAI: **not live-tested (no credentials configured)**; adapters covered by unit tests.
 - **Single-call Ollama runtime (real Gemma 3 4B, `gemma3:latest`):** 3-item `/mmse/evaluate` ~9.5–14.7s; 10-item ~60–70s; **30-item full batch ~139–158s HTTP 200 with all 30 structured results when it completes** — but generation variance occasionally exceeds the 175s backend / 180s browser window (observed 170s & 175s timeouts → 503). 12-item accuracy regression HTTP 200, 0 errors, all judgments sensible. Direct single-call diagnostics: 916–1533 output tokens, ~7.4 tok/s, prompt_eval ~600–2300 tokens. `/predict` 200 (unchanged). Structured output schema `{correct, score, confidence, reason}` verified; flat (no `items` wrapper) response shape also accepted.
 - Frontend batch logic verified by Node harness (compiled `state.ts` + `batch.ts`): location-unconfigured → no `orientation_place` items sent; location-configured → 5 place items sent with the examiner's values as `expected`; place response counts require location + response; `countAssessmentErrors` counts only `error` items; `applyBatchResultsToDraft` still applies place scores; totals remain integer 0–30.
 - Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
@@ -489,16 +530,22 @@ alzheimers_ml_project/
 - `2abab40` — `fix(mmse): sequential Ollama batch eval with 180s frontend timeout`
 - `9f29276` — `fix(mmse): add exact copying figure reference asset`
 - `6943501` — `perf(mmse): reduce local ai assessment latency`
+- `4fdc6fe` — `feat(mmse): add q11 vision evaluation service`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `9f29276`; perf milestone `6943501` committed locally (pending push). Working tree clean after the docs record commit.
+- Pushed to `origin/main` successfully through `db0f02f`. Q11 vision milestone `4fdc6fe` committed locally (pending push after docs record).
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
-- Copying figure is supplied at `frontend/public/mmse-copying-figure.png` (referenced via `COPYING_REFERENCE_IMAGE`); do not substitute or redraw it. Note: the file bytes are JPEG despite the `.png` extension — browsers content-sniff images so rendering is unaffected, but do not "fix" the extension.
+- Q11 vision backend exists (`POST /mmse/copying/evaluate`) but the frontend does NOT use it yet (UI/UX is a separate later prompt). Q11 currently remains examiner-scored in the UI.
+- Q11 reference figure is loaded server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`). Never accept the reference from the client; never duplicate/regenerate it. Note: the file bytes are JPEG despite the `.png` extension — Pillow and browsers content-sniff so it works; do not "fix" the extension.
+- `VISION_PROVIDER` defaults to `ollama`; Gemini/OpenAI require backend `GEMINI_API_KEY`/`OPENAI_API_KEY` and were not live-tested. Provider selection is ONE provider per assessment (no voting/fallback by design).
+- `VISION_TIMEOUT` (60s) is separate from the text-MMSE `OLLAMA_BATCH_TIMEOUT` (175s) and frontend 180s budget — do not merge them.
+- Q11 vision accuracy is NOT validated: a real blank-canvas false positive was observed. Confidence is a model signal, not clinical certainty; `review_required` must gate final scoring. Do not claim clinical accuracy.
+- Copying figure is supplied at `frontend/public/mmse-copying-figure.png` (referenced via `COPYING_REFERENCE_IMAGE`); do not substitute or redraw it.
 - `probabilities` in `/predict` are position-indexed (`[0,1,2]`), not keyed by `model.classes_`.
 - Do not retrain the model or modify the `/predict` contract without explicit instruction.
 - AI results are an assist signal, never a diagnosis; confidence is a model signal, not clinical certainty. Keep these disclaimers in the UI.
-- AI secrets (`GEMINI_API_KEY`, etc.) must stay backend-only (env/`.env`); never ship them in React or commit them.
+- AI secrets (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.) must stay backend-only (env/`.env`); never ship them in React or commit them.
 - Real AI-model correctness was verified on this machine (Ollama 0.32.9 + Gemma 3 4B): full MMSE batch now evaluates in a SINGLE model call. **Latency warning:** the full 30-item batch takes ~139–158s when it completes and can exceed the 175s backend / 180s browser timeout due to generation variance (Gemma 3 4B runs ~7.4 tok/s split 54% CPU / 46% GPU on a 4 GB GTX 1650). Do not raise the frontend timeout above what the user configured without instruction; never "fix" latency by removing items or lowering quality. Options (larger GPU, smaller/quantized model, streaming, split-batch) require explicit user approval.
 - `README.md` has stale claims (e.g., Dataset.csv "not committed") — treat code as authoritative.
