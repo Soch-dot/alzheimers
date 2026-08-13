@@ -44,7 +44,6 @@ Security/scope rules:
 Each MMSE section defines its own evaluation prompt and rules.
 """
 
-from datetime import datetime
 import json
 import os
 import time
@@ -55,6 +54,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from pydantic import BaseModel
+
+from src.mmse_rules import evaluate_orientation_time
 
 load_dotenv()
 
@@ -78,8 +79,11 @@ OLLAMA_BATCH_TIMEOUT = float(os.getenv("OLLAMA_BATCH_TIMEOUT", "175"))
 OLLAMA_MAX_CONCURRENCY = max(1, int(os.getenv("OLLAMA_MAX_CONCURRENCY", "1")))
 GEMINI_MAX_CONCURRENCY = max(1, int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
+# Sections scored deterministically on the backend (no AI provider). These are
+# excluded from AI_SECTIONS so they never reach the model.
+DETERMINISTIC_SECTIONS = {"orientation_time"}
+
 AI_SECTIONS = {
-    "orientation_time",
     "orientation_place",
     "registration",
     "attention_serial7",
@@ -153,42 +157,10 @@ BATCH_SYSTEM_PROMPT = (
 )
 
 
-def _orientation_time_expected(item_key: str) -> str:
-    """Date-derived expected answers are computed server-side (authoritative)."""
-    now = datetime.now()
-    if item_key == "year":
-        return str(now.year)
-    if item_key == "season":
-        month = now.month
-        if month in (3, 4, 5):
-            return "spring"
-        if month in (6, 7, 8):
-            return "summer"
-        if month in (9, 10, 11):
-            return "fall (autumn)"
-        return "winter"
-    if item_key == "date":
-        return str(now.day)
-    if item_key == "day":
-        return now.strftime("%A")
-    if item_key == "month":
-        return now.strftime("%B")
-    return item_key
-
-
 def _prompt_for(section: str, item_key: str, question: str, response: str, expected: str) -> str:
     resp = response.strip()
     q = question.strip() or f"({item_key})"
 
-    if section == "orientation_time":
-        exp = _orientation_time_expected(item_key)
-        return (
-            f"MMSE — Orientation to Time, item \"{item_key}\". Question: \"{q}\". "
-            f"Expected answer: \"{exp}\". The patient responded: \"{resp}\". "
-            "Score 1 only if the response is equivalent to the expected answer. "
-            'Accept reasonable formats (e.g. "2026" or "two thousand twenty-six" '
-            'for the year; a season name such as "fall" or "autumn" for the season).'
-        )
     if section == "orientation_place":
         return (
             f"MMSE — Orientation to Place, item \"{item_key}\". Question: \"{q}\". "
@@ -563,54 +535,84 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     """
     Evaluate a batch of MMSE responses.
 
-    Provider-aware: Ollama uses ONE model generation for the whole batch;
-    Gemini keeps per-item parallel evaluation. Returns
+    Deterministic sections (see DETERMINISTIC_SECTIONS) are scored server-side
+    with NO AI provider call. Only the remaining items reach the provider:
+    Ollama uses ONE model generation for the whole AI batch; Gemini keeps
+    per-item parallel evaluation. Returns
     {"items": {key: result}, "errors": {key: message}}. Raises:
-      503 when AI is disabled or the provider is unreachable for every item;
+      503 when AI is disabled or the provider is unreachable for every item
+          (only relevant when the request actually contains AI-evaluated items);
       422 when the request itself is malformed (no items supplied).
     """
-    if AI_PROVIDER == "none":
-        raise HTTPException(
-            status_code=503,
-            detail="AI assessment is not configured (AI_PROVIDER=none).",
-        )
     if not req.items:
         raise HTTPException(status_code=422, detail="No MMSE items to evaluate.")
 
     t0 = time.perf_counter()
-    keys = list(req.items.keys())
     results: dict = {}
     errors: dict = {}
     provider_failures = 0
 
-    if AI_PROVIDER == "ollama":
-        results, errors, provider_failures = _evaluate_ollama_batch(req)
-    else:
-        workers = min(len(keys), _max_concurrency())
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(_evaluate_single, key, req.items[key]): key for key in keys
-            }
-            for future in as_completed(futures):
-                key = futures[future]
-                outcome = future.result()
-                if isinstance(outcome, dict):
-                    results[key] = outcome
-                else:
-                    errors[key] = outcome.message
-                    if outcome.kind == "provider":
-                        provider_failures += 1
+    # Split the batch: deterministic items are scored first without any AI
+    # provider involvement. Only the remaining (AI-required) items are sent to
+    # the model, so the actual model payload never contains deterministic keys.
+    ai_items: dict[str, MMSEBatchItem] = {}
+    for key, entry in req.items.items():
+        section, sep, item_key = key.partition(".")
+        if section in DETERMINISTIC_SECTIONS:
+            result = evaluate_orientation_time(item_key, entry.response)
+            if result is not None:
+                results[key] = result
+            else:
+                errors[key] = (
+                    f"Unsupported deterministic item key: {key!r}"
+                )
+        else:
+            ai_items[key] = entry
+
+    if ai_items:
+        if AI_PROVIDER == "none":
+            raise HTTPException(
+                status_code=503,
+                detail="AI assessment is not configured (AI_PROVIDER=none).",
+            )
+        ai_req = MMSEEvaluateRequest(items=ai_items)
+        if AI_PROVIDER == "ollama":
+            ai_results, ai_errors, ai_failures = _evaluate_ollama_batch(ai_req)
+        else:
+            ai_results, ai_errors, ai_failures = {}, {}, 0
+            workers = min(len(ai_items), _max_concurrency())
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {
+                    pool.submit(_evaluate_single, key, entry): key
+                    for key, entry in ai_items.items()
+                }
+                for future in as_completed(futures):
+                    key = futures[future]
+                    outcome = future.result()
+                    if isinstance(outcome, dict):
+                        ai_results[key] = outcome
+                    else:
+                        ai_errors[key] = outcome.message
+                        if outcome.kind == "provider":
+                            ai_failures += 1
+        results.update(ai_results)
+        errors.update(ai_errors)
+        provider_failures = ai_failures
 
     elapsed = time.perf_counter() - t0
+    deterministic_count = sum(
+        1 for key in req.items if key.partition(".")[0] in DETERMINISTIC_SECTIONS
+    )
     # Development-side timing only (backend log; never shown in the UI).
     print(
-        f"[ai_eval] AI_PROVIDER={AI_PROVIDER} items={len(keys)} "
-        f"provider_calls={1 if AI_PROVIDER == 'ollama' else len(keys)} "
+        f"[ai_eval] AI_PROVIDER={AI_PROVIDER} items={len(req.items)} "
+        f"(deterministic={deterministic_count}, ai={len(ai_items)}) "
+        f"provider_calls={1 if AI_PROVIDER == 'ollama' and ai_items else len(ai_items)} "
         f"elapsed={elapsed:.2f}s results={len(results)} errors={len(errors)}",
         flush=True,
     )
 
-    if not results and errors and provider_failures == len(errors):
+    if ai_items and not ai_results and errors and provider_failures == len(errors):
         raise HTTPException(
             status_code=503, detail=f"AI assessment unavailable: {next(iter(errors.values()))}"
         )
