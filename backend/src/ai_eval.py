@@ -19,7 +19,14 @@ Provider selection (env var `AI_PROVIDER`):
 
 Provider config comes from the environment (optionally a backend .env):
   AI_PROVIDER, OLLAMA_BASE_URL, OLLAMA_MODEL, GEMINI_BASE_URL,
-  GEMINI_API_KEY, GEMINI_MODEL, AI_TIMEOUT.
+  GEMINI_API_KEY, GEMINI_MODEL, AI_TIMEOUT,
+  OLLAMA_MAX_CONCURRENCY, GEMINI_MAX_CONCURRENCY.
+
+Concurrency is provider-aware: local Ollama runs on a single GPU/CPU so the
+batch is evaluated SEQUENTIALLY by default (OLLAMA_MAX_CONCURRENCY=1) to avoid
+GPU/CPU contention and model-load churn. Cloud providers may evaluate items in
+parallel (GEMINI_MAX_CONCURRENCY=8). The browser always sends ONE batch request
+either way.
 
 Security/scope rules:
   - API keys exist ONLY on the backend. They are never shipped to React.
@@ -58,6 +65,8 @@ GEMINI_BASE_URL = os.getenv(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "30"))
+OLLAMA_MAX_CONCURRENCY = max(1, int(os.getenv("OLLAMA_MAX_CONCURRENCY", "1")))
+GEMINI_MAX_CONCURRENCY = max(1, int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
 AI_SECTIONS = {
     "orientation_time",
@@ -396,6 +405,16 @@ def _evaluate_single(key: str, entry: MMSEBatchItem):
         return _ItemFailure("invalid", str(exc))
 
 
+def _max_concurrency() -> int:
+    """Provider-aware batch concurrency. Ollama is local (single GPU/CPU) so it
+    evaluates sequentially by default; cloud providers may run in parallel."""
+    if AI_PROVIDER == "ollama":
+        return OLLAMA_MAX_CONCURRENCY
+    if AI_PROVIDER == "gemini":
+        return GEMINI_MAX_CONCURRENCY
+    return 8
+
+
 def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     """
     Evaluate a batch of MMSE responses.
@@ -417,7 +436,7 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     errors: dict = {}
     provider_failures = 0
 
-    workers = min(len(keys), 8)
+    workers = min(len(keys), _max_concurrency())
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(_evaluate_single, key, req.items[key]): key for key in keys

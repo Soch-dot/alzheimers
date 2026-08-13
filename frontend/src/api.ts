@@ -62,7 +62,7 @@ export interface MmseBatchResponse {
 
 export const evaluateMmseBatch = async (
   items: Record<string, MmseBatchItem>,
-  timeoutMs = 90000
+  timeoutMs = 180000
 ): Promise<MmseBatchResponse> => {
   const response = await axios.post<MmseBatchResponse>(
     `${API_BASE_URL}/mmse/evaluate`,
