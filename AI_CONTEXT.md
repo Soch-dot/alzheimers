@@ -397,14 +397,15 @@ alzheimers_ml_project/
 | 2026-08-13 | `8cadbc5` | `refactor(mmse): batch AI assessment with a single evaluate request` | Two-phase batch workflow |
 | 2026-08-13 | `babcb03` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
 | 2026-08-13 | `2abab40` | `fix(mmse): sequential Ollama batch eval with 180s frontend timeout` | Provider-aware concurrency + batch timeout |
+| 2026-08-13 | `9f29276` | `fix(mmse): add exact copying figure reference asset` | Section 11 reference figure wired |
 
 ---
 
 ## 15. Current Roadmap
 
 ### Immediate
-- Configure a real AI provider (Ollama local, or Gemini with a backend `GEMINI_API_KEY`) and validate live AI-scored responses before release. `AI_PROVIDER`/model/base URLs live in backend env (never in React).
-- Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`).
+- Configure a real AI provider (Ollama local, or Gemini with a backend `GEMINI_API_KEY`) and validate live AI-scored responses before release. `AI_PROVIDER`/model/base URLs live in backend env (never in React). (Ollama + Gemma 3 4B now configured and verified on this machine.)
+- ~~Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`).~~ **Done** — `frontend/public/mmse-copying-figure.png`, `COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png'`.
 
 ### Next
 - Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review). Do NOT fold into the current AI-text evaluation.
@@ -426,6 +427,7 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Exact copying figure wired into Section 11:** supplied `frontend/public/mmse-copying-figure.png` referenced via `COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png'` in `frontend/src/mmse/config.ts`. The Copying section (already rendering "Please copy this picture." then the `<img>` when the constant is set) now shows the exact figure as the ONLY stimulus; drawing canvas and examiner scoring for Q11 kept as-is. No vision (Ollama/Gemma/Gemini/OpenAI), no camera upload, no automated figure scoring. Backend, `/predict`, ML, SHAP, MMSE scoring, and AI batch architecture untouched.
 - **Provider-aware batch concurrency + 180s timeout (`2abab40`):** Real runtime test of Ollama + Gemma 3 4B showed a single `/api/chat` call completes in ~3–15 s, but the full MMSE batch timed out at the frontend's 90 s because the backend evaluated up to 8 items concurrently on a single local GPU (GTX 1650 4 GB). Fix (optimization ONLY — no MMSE structure/scoring/`/predict` changes):
   - **Backend `ai_eval.py`:** provider-aware concurrency via `_max_concurrency()` — `OLLAMA_MAX_CONCURRENCY` (default `1`, sequential) for local Ollama to avoid GPU/CPU contention; `GEMINI_MAX_CONCURRENCY` (default `8`, unchanged cloud behavior). New env vars documented in the module docstring. The two-phase batch architecture is unchanged — the browser still sends exactly ONE `POST /mmse/evaluate`.
   - **Frontend `api.ts`:** default batch timeout `90000 → 180000` ms. Per-item `AI_TIMEOUT` (30 s) is untouched; timeout protection kept — the UI still shows "AI assessment timed out." instead of hanging.
@@ -440,7 +442,7 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: **clean.** Git branch `main`, tracking `origin/main`. Concurrency/timeout fix committed as `2abab40` and pushed. Batch work committed as `8cadbc5` (+ `e9478e7` docs), UX work as `babcb03`, concurrency work as `2abab40`. `npm run build` (tsc + vite) passes; full MMSE batch verified live against real Gemma 3 4B (sequential, ~172 s < 180 s timeout). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves.
+- Working tree: **clean.** Git branch `main`, tracking `origin/main`. Copying-figure work committed and pushed (see below). Batch work `8cadbc5` (+ `e9478e7` docs), UX work `babcb03`, concurrency work `2abab40`. `npm run build` (tsc + vite) passes; full MMSE batch verified live against real Gemma 3 4B (sequential, ~172 s < 180 s timeout). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves.
 
 ### Next Recommended Task
 - Configure a real AI provider and smoke-test live AI responses (correct/incorrect paths) before release.
@@ -476,13 +478,14 @@ alzheimers_ml_project/
 - `e9478e7` — `docs: record batch AI assessment commit hash`
 - `babcb03` — `fix(mmse): location-aware place, friendly errors, observation labels`
 - `2abab40` — `fix(mmse): sequential Ollama batch eval with 180s frontend timeout`
+- `9f29276` — `fix(mmse): add exact copying figure reference asset`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `2abab40`. Working tree clean.
+- Pushed to `origin/main` successfully through `9f29276`. Working tree clean.
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
-- Copying-figure asset is missing; do not substitute a generic pentagon.
+- Copying figure is supplied at `frontend/public/mmse-copying-figure.png` (referenced via `COPYING_REFERENCE_IMAGE`); do not substitute or redraw it. Note: the file bytes are JPEG despite the `.png` extension — browsers content-sniff images so rendering is unaffected, but do not "fix" the extension.
 - `probabilities` in `/predict` are position-indexed (`[0,1,2]`), not keyed by `model.classes_`.
 - Do not retrain the model or modify the `/predict` contract without explicit instruction.
 - AI results are an assist signal, never a diagnosis; confidence is a model signal, not clinical certainty. Keep these disclaimers in the UI.
