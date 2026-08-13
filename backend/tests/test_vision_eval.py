@@ -69,6 +69,48 @@ def make_blank_image(size=(640, 480)) -> bytes:
     return buf.getvalue()
 
 
+def make_near_blank_image(size=(640, 480)) -> bytes:
+    """White page with only a tiny dark speck (below the ink-fraction gate)."""
+    img = Image.new("RGB", size, "white")
+    d = ImageDraw.Draw(img)
+    d.point((5, 5), fill=(0, 0, 0))  # a single pixel
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def make_simple_drawing(size=(640, 480)) -> bytes:
+    """A small but clearly visible simple drawing."""
+    img = Image.new("RGB", size, "white")
+    d = ImageDraw.Draw(img)
+    d.rectangle([20, 20, 300, 220], outline=(0, 0, 0), width=5)
+    d.line([20, 20, 300, 220], fill=(0, 0, 0), width=5)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def make_faint_drawing(size=(640, 480)) -> bytes:
+    """A faint (light-gray) but visible pencil-style drawing."""
+    img = Image.new("RGB", size, "white")
+    d = ImageDraw.Draw(img)
+    d.polygon([(140, 90), (360, 60), (420, 220), (260, 340), (90, 240)], outline=(235, 235, 235), width=3)
+    d.polygon([(300, 110), (560, 130), (530, 330), (310, 300)], outline=(235, 235, 235), width=3)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def make_poor_copy(size=(640, 480)) -> bytes:
+    """A single figure only (missing the second figure / overlap)."""
+    img = Image.new("RGB", size, "white")
+    d = ImageDraw.Draw(img)
+    d.ellipse([(180, 120), (460, 360)], outline=(0, 0, 0), width=5)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
 def make_png(data: bytes) -> bytes:
     img = Image.open(io.BytesIO(data)).convert("RGB")
     buf = io.BytesIO()
@@ -214,6 +256,66 @@ class TestProviderAndValidation(unittest.TestCase):
             }))
         )
         self.assertFalse(res["review_required"])
+
+
+# ---------------------------------------------------------------------------
+# Blank / near-blank pre-check (checks: blank rejected before provider,
+# visible/faint/good/poor drawings reach the provider)
+# ---------------------------------------------------------------------------
+class TestBlankPreCheck(unittest.TestCase):
+    def test_completely_blank_rejected(self):
+        with self.assertRaises(vision_image.VisionImageError) as ctx:
+            vision_image.prepare_patient_image(make_blank_image(), "image/jpeg")
+        self.assertIn("No drawing detected", str(ctx.exception))
+
+    def test_nearly_blank_rejected(self):
+        with self.assertRaises(vision_image.VisionImageError):
+            vision_image.prepare_patient_image(make_near_blank_image(), "image/jpeg")
+
+    def test_blank_never_calls_provider(self):
+        # The pre-check must reject BEFORE any provider invocation. Prove it by
+        # making get_provider raise if it were ever reached.
+        with mock.patch.object(
+            vision_eval, "get_provider", side_effect=AssertionError("provider must not be called")
+        ):
+            with self.assertRaises(vision_image.VisionImageError):
+                evaluate_copying_image(make_blank_image(), "image/jpeg")
+
+    def test_simple_drawing_reaches_provider(self):
+        with mock.patch.object(
+            vision_eval, "get_provider",
+            return_value=FakeProvider(json.dumps({
+                "correct": True, "score": 1, "confidence": 0.9, "reason": "ok"
+            })),
+        ):
+            res = evaluate_copying_image(make_simple_drawing(), "image/jpeg")
+            self.assertEqual(res["score"], 1)
+
+    def test_faint_drawing_reaches_provider(self):
+        with mock.patch.object(
+            vision_eval, "get_provider",
+            return_value=FakeProvider(json.dumps({
+                "correct": True, "score": 1, "confidence": 0.9, "reason": "ok"
+            })),
+        ):
+            res = evaluate_copying_image(make_faint_drawing(), "image/jpeg")
+            self.assertEqual(res["score"], 1)
+
+    def test_good_copy_reaches_provider_and_scores(self):
+        provider = FakeProvider(json.dumps({
+            "correct": True, "score": 1, "confidence": 0.95, "reason": "both figures present"
+        }))
+        res = evaluate_copying_image_with_fake(provider)
+        self.assertEqual(res["score"], 1)
+
+    def test_poor_copy_reaches_provider_and_scores(self):
+        provider = FakeProvider(json.dumps({
+            "correct": False, "score": 0, "confidence": 0.6, "reason": "only one figure"
+        }))
+        with mock.patch.object(vision_eval, "get_provider", return_value=provider):
+            res = evaluate_copying_image(make_poor_copy(), "image/jpeg")
+        self.assertEqual(res["score"], 0)
+        self.assertTrue(res["review_required"])
 
 
 def evaluate_copying_image_with_fake(provider: FakeProvider) -> dict:
