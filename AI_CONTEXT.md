@@ -23,6 +23,7 @@
 
 ### Working (verified)
 - Patient clinical input form (age, sex, education_years, mmse, ses).
+- **Assessment Details step (pre-MMSE):** the app now collects Age / Sex / Education (years) / SES on a dedicated first screen before the MMSE begins. Values live in App-level `formData` so they survive Assessment Details → MMSE → AI assessment → Summary → Analysis (no re-entry). "Restart Assessment" clears them back to defaults and returns to Assessment Details. The post-MMSE screen shows them as a read-only summary (no duplicate editable inputs).
 - ML prediction via FastAPI `POST /predict` (Random Forest pipeline).
 - Probability breakdown (pie chart + bars) and confidence/`detection_percentage` display.
 - **AI-assisted 11-section MMSE questionnaire** (replaces the raw MMSE number input) with a **two-phase batch workflow**:
@@ -56,8 +57,8 @@
 ### Frontend
 - **Framework:** React 19, TypeScript (strict), Vite 7, Tailwind CSS 4, Framer Motion, Axios, Chart.js + react-chartjs-2.
 - **Entry point:** `frontend/index.html` → `frontend/src/main.tsx` → `<App/>`.
-- **Main components:** `App.tsx` (orchestration + shared state), `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `EmptyState`, `ErrorMessage`, `LoadingSpinner` (unused), `MMSEAssessment` + MMSE subcomponents.
-- **State management:** Local React state only. No router, no Redux/Zustand. Prediction form state and MMSE phase live in `App.tsx`; MMSE section state lives inside `MMSEAssessment`.
+- **Main components:** `App.tsx` (orchestration + shared state), `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `EmptyState`, `ErrorMessage`, `LoadingSpinner` (unused), `AssessmentDetails` (pre-MMSE demographics), `MMSEAssessment` + MMSE subcomponents.
+- **State management:** Local React state only. No router, no Redux/Zustand. Prediction form state and MMSE phase live in `App.tsx` (phase = `'details' | 'mmse' | 'form'`); MMSE section state lives inside `MMSEAssessment`.
 - **API layer:** `frontend/src/api.ts` — typed axios client, base URL from `VITE_API_URL` (default `http://127.0.0.1:8000`).
 - **Styling architecture:** Tailwind utility classes inline in JSX. No CSS modules, no central design-token file. Dark glassmorphism theme (see Design System).
 
@@ -82,7 +83,9 @@
 ### Actual data flow
 ```
 User/Examiner
-  → React form OR MMSE questionnaire (App.tsx)
+  → Assessment Details (frontend/src/components/AssessmentDetails.tsx, App.tsx 'details' phase)
+  → MMSE questionnaire (App.tsx 'mmse' phase)
+  → Analysis (App.tsx 'form' phase): read-only summary + MMSE score + Analyze
   → formData { age, sex, education_years, mmse, ses }
   → predictAlzheimers()  (frontend/src/api.ts)
   → axios POST /predict   (FastAPI backend/src/api.py)
@@ -123,13 +126,14 @@ alzheimers_ml_project/
     ├── vite.config.ts, tsconfig.json, tailwind.config.js, postcss.config.js
     ├── src/main.tsx                  # REAL entry point
     ├── src/main.ts, src/counter.ts   # DEAD Vite vanilla-template leftovers — do not rely on them
-    ├── src/App.tsx                   # Main orchestration + form state + MMSE phase
+    ├── src/App.tsx                   # Main orchestration + form state + MMSE phase ('details' | 'mmse' | 'form')
     ├── src/api.ts                    # Axios client + PredictionResponse/PatientInput types + /mmse/evaluate batch client
     ├── src/mmse/state.ts             # MMSE state types, initial state, scoring, completion checks, MmsePhase
     ├── src/mmse/batch.ts             # Batch payload builder, per-item result applier, response-completeness helpers
     ├── src/mmse/config.ts            # MMSE config: objects, expected answers (non-location), LOCATION_FIELDS
     └── src/components/
         ├── index.ts                  # Barrel exports for all UI components
+        ├── AssessmentDetails.tsx     # Pre-MMSE demographics step (Age/Sex/Education/SES); Continue gated on validity
         ├── Layout.tsx, FormPanel.tsx, InputField.tsx, SelectField.tsx, AnalyzeButton.tsx,
         ├── ResultCard.tsx, PredictionPieChart.tsx, EmptyState.tsx, ErrorMessage.tsx, LoadingSpinner.tsx (unused)
         └── mmse/                     # MMSE questionnaire UI (two-phase: collect → batch assess)
@@ -289,7 +293,8 @@ alzheimers_ml_project/
   - Partial failure → "Some responses could not be assessed." + [Review items] (+ re-assess for the still-missing items). Per-item failures show "AI assessment unavailable for this item." with technical detail behind a disclosure. Invalid AI output is never scored silently (goes to `errors`, item marked `error`).
 - **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI. `MMSEState.location` holds the examiner-configured assessment location (reference answers for Orientation to Place). Q11 uses a dedicated `CopyingState { status: empty|photo|analyzing|assessed|error, previewData, previewName, aiScore, reviewRequired, reviewed, manual, errorKind, errorDetail }`; `copyingEffective()`/`isCopyingFinalized()` mirror the ItemState helpers. `previewData` is an in-memory data URL — never persisted.
 - **Speech capture:** `useSpeechRecognition()` in `primitives.tsx` uses the native Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`), no new dependency. A transcript only populates the response field — it never triggers AI. Unsupported browsers degrade to typing with a notice.
-- **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
+- **Flow to the API:** Assessment Details (pre-MMSE, `App.tsx` 'details' phase) → MMSE → MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → Analysis screen (read-only demographics + MMSE score + Analyze) → existing `predictAlzheimers()` → `POST /predict`.
+- **Assessment Details step:** first screen of the flow (`phase === 'details'`). Collects Age (50–100), Sex (Male=1/Female=0), Education years (0–25), SES (1–5) using the same `InputField`/`SelectField` components and field semantics as the original post-MMSE form. `[ Continue to MMSE ]` (in `AssessmentDetails.tsx`) stays disabled until every field is within range; the MMSE cannot be started with missing/invalid details. Values are stored in App-level `formData` and preserved across forward/backward navigation through the whole flow. On the Analysis screen they appear as a read-only summary (`Age / Sex / Education / SES`), not editable inputs. "Restart Assessment" (`handleRestart`) resets them to defaults and returns to the 'details' phase.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; during Phase 1 Next is enabled once the section's responses are complete (`isSectionResponseComplete`); after assessment it requires finalized scores (`isSectionComplete`); navigation is locked while the batch runs. Answers persist when navigating back.
 - **Right panel during MMSE phase:** `EmptyState` accepts optional `title`/`description`/`showAnalyze` props; during the MMSE phase `App.tsx` renders a contextual variant ("MMSE Assessment / Complete the assessment to generate your screening result.") with the Analyze button hidden so the panel doesn't look disconnected from the assessment flow.
 - **Reference figure:** The exact figure asset is **not bundled**. `COPYING_REFERENCE_IMAGE` in `config.ts` is empty and a placeholder is shown until the asset is supplied. Do NOT substitute a generic pentagon.
@@ -317,6 +322,7 @@ alzheimers_ml_project/
 ## 9. Current Features (checklist)
 
 - [x] Patient clinical input (age, sex, education_years, mmse, ses)
+- [x] Assessment Details step (Age/Sex/Education/SES) collected BEFORE the MMSE; values preserved across the flow; read-only summary on Analysis; restart clears them
 - [x] ML prediction (`POST /predict`)
 - [x] Probability breakdown (pie chart + bars)
 - [x] Confidence / `detection_percentage` display
@@ -429,6 +435,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `4fdc6fe` | `feat(mmse): add q11 vision evaluation service` | Backend vision endpoint + provider abstraction |
 | 2026-08-13 | `177c62f` | `fix(mmse): reject blank q11 submissions before vision` | Blank/near-blank pre-check gate |
 | 2026-08-13 | `ee64a7c` | `feat(mmse): add q11 photo assessment ui` | Q11 camera/upload → analyze → review UI |
+| 2026-08-13 | (next) | `feat(ui): collect assessment details before mmse` | Pre-MMSE Assessment Details step |
 
 ---
 
@@ -457,6 +464,11 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Assessment Details pre-MMSE step (feat(ui): collect assessment details before mmse):** Frontend-only. Added a first screen that collects Age / Sex / Education (years) / SES BEFORE the MMSE, so the demographics no longer appear as editable inputs on the post-MMSE screen.
+  - **New `frontend/src/components/AssessmentDetails.tsx`:** uses the existing `FormPanel`/`InputField`/`SelectField` components. Fields: Age (`min 50 / max 100`), Sex (SelectField Male=1 / Female=0), Education (years, `min 0 / max 25`), SES (`min 1 / max 5`). Subtitle "Enter the information required for the risk assessment." `[ Continue to MMSE ]` button is disabled until every field is within range (`valid`), then calls `onContinue` → `App.tsx` switches to the `'mmse'` phase.
+  - **`App.tsx` changes:** `phase` union widened from `'mmse' | 'form'` to `'details' | 'mmse' | 'form'`, defaulting to `'details'`. `formData` stays in App state so values survive the whole flow (Assessment Details → MMSE → AI assessment → Summary → Analysis) and are never lost on navigation. New `handleRestart` resets `formData` to defaults (age 70, sex 1, education_years 12, ses 2, mmse 0) and returns to the `'details'` phase (replaces the old `handleRestartMmse` which only reset `mmse`). The post-MMSE Analysis screen now shows a **read-only "Assessment Details" summary card** (Age / Sex / Education / SES) + the MMSE Score box + `AnalyzeButton`; the duplicate editable `InputField`/`SelectField` grid was removed. Right panel shows a contextual `EmptyState` for the `'details'` phase ("Assessment Details / Enter the patient's assessment details to begin the screening.", Analyze hidden).
+  - **`/predict` contract unchanged:** `handleAnalyze` still sends exactly `{ age, sex, education_years, mmse, ses }`; the Analyze button is additionally gated by `detailsValid` (always true once the details step passed, defensive only). No backend, ML, SHAP, MMSE scoring, or Q11 vision changes.
+  - **Verified:** `npm run build` (`tsc && vite build`) passes. Live `POST /predict` on `127.0.0.1:8000` with `{age:70, sex:1, education_years:12, mmse:28, ses:2}` → HTTP 200 `{alzheimers_detected: true, predicted_class: Demented, detection_percentage: 79.5}`.
 - **Q11 photo-based vision assessment UI (feat(mmse): add q11 photo assessment ui):** Replaced the on-screen drawing canvas for MMSE Question 11 with a photo flow. Frontend-only; the backend `POST /mmse/copying/evaluate` contract is consumed unchanged.
   - **New `frontend/src/components/mmse/Q11PhotoAssessment.tsx`:** reference figure shown in `sections.tsx` → examiner takes (`capture="environment"`) or uploads a photo (native file input, no camera library) → preview with `[Retake]`/`[Choose Another]`/`[Analyze Drawing]` → explicit "Analyze Drawing" calls `evaluateCopyingImage()` (JSON `{image: dataUrl}`, 90s axios timeout) → normalized result with confidence + `review_required`. States: `empty → photo → analyzing → assessed | error`. Loading shows "Analyzing drawing…" + spinner + "This may take up to a minute on the local vision model." (no fake progress, no technical logs, duplicate-click guarded). Assessed view shows "✓ Correct response"/"✕ Incorrect response" + "AI confidence: X%" + "⚠ Review required" (when `review_required`) with `[Accept AI result]`/`[Override]` (manual 0/1 becomes final). Error mapping: blank → "No drawing detected. Please submit a clear photo of the patient's drawing." (Retake/Choose Another); timeout → "Vision assessment timed out." (Retry/Retake); unavailable → "Vision assessment unavailable." (Retry); invalid → "Vision assessment returned an invalid result." (Retry); upload (bad/oversized/undecodable image) → friendly detail (Retake/Choose Another). Camera permission denied → "Camera access was not granted." with Upload Photo still available; unsupported camera → upload fallback notice. **No raw OS/network/stack traces shown.** Preview is an in-memory data URL (`previewData`) — never written to disk/localStorage/backend/logs.
   - **State (`frontend/src/mmse/state.ts`):** new `CopyingState { status: empty|photo|analyzing|assessed|error, previewData, previewName, aiScore, reviewRequired, reviewed, manual, errorKind, errorDetail }`; `MMSEState.copying` changed from `ScoreMark` to `CopyingState`. New helpers `copyingEffective()` (manual wins over AI) and `isCopyingFinalized()` (manual set, or AI finalized unless low-confidence-unreviewed); `computeScores().copying`, `isSectionComplete('copying')`, and `sectionResponseCounts().copying` all use them. MMSE total stays integer 0–30; Q1–10, `/mmse/evaluate` batch, and `/predict` untouched.
@@ -493,13 +505,16 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: Q11 UI milestone committed (`ee64a7c`). Git branch `main`, tracking `origin/main`. Q11 vision backend `4fdc6fe`/`3c837f5`, blank pre-check `177c62f`/`9b1e6ec`, and Q11 UI `ee64a7c` all pushed. `npm run build` passes; `/predict` and `/mmse/evaluate` verified HTTP 200; Q11 vision endpoint verified live against real Gemma 3 4B (blank → 400 pre-provider; good/poor → 200 with structured results). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest`; Gemma 3 4B supports vision.
+- Working tree: Assessment Details milestone in progress (uncommitted; `App.tsx`, `components/index.ts` modified, `components/AssessmentDetails.tsx` new). Git branch `main`, tracking `origin/main`. Q11 vision backend `4fdc6fe`/`3c837f5`, blank pre-check `177c62f`/`9b1e6ec`, and Q11 UI `ee64a7c` all pushed. `npm run build` passes; `/predict` verified HTTP 200 with the unchanged 5-field payload; `/mmse/evaluate` verified HTTP 200; Q11 vision endpoint verified live against real Gemma 3 4B (blank → 400 pre-provider; good/poor → 200 with structured results). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest`; Gemma 3 4B supports vision.
 
 ### Next Recommended Task
 - Consider whether the local Ollama latency is acceptable for production. The full 30-item batch sits close to the 180s browser timeout on this hardware. Options to revisit deliberately (never by removing items): a larger GPU, a smaller/quantized model, streaming progress, or a split-batch strategy. Any of these needs explicit user instruction.
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
+- `frontend/src/components/AssessmentDetails.tsx` (NEW: pre-MMSE Assessment Details step — Age/Sex/Education/SES, Continue gated on validity)
+- `frontend/src/App.tsx` (phase `'details' | 'mmse' | 'form'` defaulting to 'details'; `handleRestart` clears demographics and returns to details; read-only assessment summary on the Analysis screen; contextual right-panel EmptyState for the details phase; `/predict` payload unchanged)
+- `frontend/src/components/index.ts` (added `AssessmentDetails` barrel export)
 - `frontend/src/components/mmse/Q11PhotoAssessment.tsx` (NEW: Q11 photo flow — capture/upload/preview/analyze/result/review/errors)
 - `frontend/src/components/mmse/DrawingCanvas.tsx` (DELETED — replaced by the photo flow)
 - `frontend/src/components/mmse/index.ts` (removed `DrawingCanvas` barrel export)
@@ -526,7 +541,8 @@ alzheimers_ml_project/
 - Earlier: batch workflow files (`backend/src/api.py`, `frontend/src/api.ts`, `frontend/src/mmse/batch.ts`, etc.) — committed in `8cadbc5`.
 
 ### Tests Verified
-- `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
+- `npm run build` (`tsc && vite build`) — passes, no TypeScript errors (verified after the Assessment Details milestone).
+- Live `POST /predict` with `{age: 70, sex: 1, education_years: 12, mmse: 28, ses: 2}` → HTTP 200, contract unchanged.
 - **Q11 blank pre-check (synthetic, stdlib unittest):** `python -m unittest backend.tests.test_vision_eval` — 29/29 pass. New: completely blank white → rejected (400 message); near-blank (single pixel) → rejected; blank NEVER calls the provider (verified by mocking `get_provider` to fail if reached); simple visible drawing / faint 235-gray drawing / good copy / poor copy all reach the provider and score 0/1. Existing image-validation and result-validation suites still pass.
 - **Real Ollama + Gemma 3 4B Q11 vision test (post pre-check):** BLANK 640×480 white → **HTTP 400 in 0.0s** ("No drawing detected...") with NO `[vision_eval]` log entry (Gemma never invoked); GOOD synthetic copy → HTTP 200 in 44.8s `{correct: true, score: 1, confidence: 0.95, review_required: false}`; POOR copy (single figure) → HTTP 200 in 35.1s `{correct: false, score: 0, confidence: 0.6, review_required: true}`. Gemini/OpenAI: not live-tested (no credentials).
 - **Single-call Ollama runtime (real Gemma 3 4B, `gemma3:latest`):** 3-item `/mmse/evaluate` ~9.5–14.7s; 10-item ~60–70s; **30-item full batch ~139–158s HTTP 200 with all 30 structured results when it completes** — but generation variance occasionally exceeds the 175s backend / 180s browser window (observed 170s & 175s timeouts → 503). 12-item accuracy regression HTTP 200, 0 errors, all judgments sensible. Direct single-call diagnostics: 916–1533 output tokens, ~7.4 tok/s, prompt_eval ~600–2300 tokens. `/predict` 200 (unchanged). Structured output schema `{correct, score, confidence, reason}` verified; flat (no `items` wrapper) response shape also accepted.
@@ -549,11 +565,15 @@ alzheimers_ml_project/
 - `4fdc6fe` — `feat(mmse): add q11 vision evaluation service`
 - `177c62f` — `fix(mmse): reject blank q11 submissions before vision`
 - `ee64a7c` — `feat(mmse): add q11 photo assessment ui`
+- (next) — `feat(ui): collect assessment details before mmse`
 
 ### Push Status
 - Pushed to `origin/main` successfully through `ee64a7c` (Q11 UI milestone).
+- Assessment Details milestone: to be committed and pushed as `feat(ui): collect assessment details before mmse` + docs record.
 
 ### Important Warnings
+- Assessment Details values live only in App-level `formData` (React state) — never persisted server-side. `handleRestart` resets them to defaults; do not persist demographics anywhere (no localStorage/backend storage added).
+- Assessment Details uses the SAME field semantics/ranges as the original form (Age 50–100, Education 0–25, SES 1–5, Sex 1=Male/0=Female). The `/predict` payload must stay exactly `{age, sex, education_years, mmse, ses}` — do not add fields or change order.
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
 - Q11 blank/near-blank submissions are rejected deterministically BEFORE any vision provider call (HTTP 400, `has_drawing_content` in `vision_image.py`). This fixes the earlier blank-canvas false-positive. The gate is conservative (0.5% ink / 20 gray-level delta) so faint-but-visible drawings pass — do NOT tighten it without explicit instruction or you will over-reject legitimate faint pencil drawings.
 - Q11 vision backend exists (`POST /mmse/copying/evaluate`) AND the frontend consumes it (`evaluateCopyingImage` + `Q11PhotoAssessment.tsx`). Q11 is now fully AI-assisted with examiner accept/override.
