@@ -398,7 +398,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `babcb03` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
 | 2026-08-13 | `2abab40` | `fix(mmse): sequential Ollama batch eval with 180s frontend timeout` | Provider-aware concurrency + batch timeout |
 | 2026-08-13 | `9f29276` | `fix(mmse): add exact copying figure reference asset` | Section 11 reference figure wired |
-| 2026-08-13 | (single-call batch) | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
+| 2026-08-13 | `6943501` | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
 
 ---
 
@@ -488,10 +488,10 @@ alzheimers_ml_project/
 - `babcb03` — `fix(mmse): location-aware place, friendly errors, observation labels`
 - `2abab40` — `fix(mmse): sequential Ollama batch eval with 180s frontend timeout`
 - `9f29276` — `fix(mmse): add exact copying figure reference asset`
-- (pending) — `perf(mmse): reduce local ai assessment latency`
+- `6943501` — `perf(mmse): reduce local ai assessment latency`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `9f29276`. Working tree currently has the uncommitted single-call batch changes (this perf milestone).
+- Pushed to `origin/main` successfully through `9f29276`; perf milestone `6943501` committed locally (pending push). Working tree clean after the docs record commit.
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
