@@ -208,8 +208,9 @@ alzheimers_ml_project/
   10. Writing (1) — sentence with a noun and a verb; examiner marks, **no AI grading**.
   11. Copying (1) — reference figure + drawing canvas + examiner scoring. **No automated figure scoring.**
 - **Scoring:** `computeTotal()` in `frontend/src/mmse/state.ts`; always an integer 0–30.
-- **Examiner-assisted workflow:** The UI is for the examiner, not the patient. Every item is a Correct/Incorrect toggle; instructions are shown in "Examiner instructions — for the examiner, not the patient" boxes.
-- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). Section state lives inside `MMSEAssessment` (local state); `App.tsx` only receives the final total.
+- **Examiner-assisted workflow:** The UI is for the examiner, not the patient. Instructions are shown in "Examiner instructions — for the examiner, not the patient" boxes.
+- **Response recording:** Every question requiring a patient response records the patient's actual response (a `PatientResponse` input) and keeps it **separate** from the examiner's independent score (`ExaminerScoring`, Correct/Incorrect). Flow: question → patient responds → examiner records response → examiner scores → score computed. Patient responses are **never** auto-scored (no hardcoded matching, no AI/NLP). The three-step command has no text entry — it uses examiner observations with "Done correctly"/"Incorrect". Reading has an optional examiner note.
+- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). Each scored item uses `ItemState { response: string; correct: boolean | null }` so the response text and the examiner mark are stored separately. `orientationTime` uses `items: Record<TimeKey, ItemState>`; `attention.spellWorld` is `{ response: string; letters: [ItemState; 5] }`. Section state lives inside `MMSEAssessment` (local state); `App.tsx` only receives the final total.
 - **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; Next is disabled until the current section is complete; answers persist when navigating back.
 - **Right panel during MMSE phase:** `EmptyState` accepts optional `title`/`description`/`showAnalyze` props; during the MMSE phase `App.tsx` renders a contextual variant ("MMSE Assessment / Complete the assessment to generate your screening result.") with the Analyze button hidden so the panel doesn't look disconnected from the assessment flow.
@@ -227,7 +228,7 @@ alzheimers_ml_project/
 - **Buttons:** Blue gradient CTAs with hover lift/scale via Framer Motion; secondary buttons `bg-white/5 border-white/10`.
 - **Animations:** Framer Motion entrance animations (fade + slide + scale), `ease: [0.16, 1, 0.3, 1]`, animated probability bars, spinner.
 - **Responsive:** Two-column desktop layout (form/MMSE left, results right), stacking on mobile; no horizontal scroll; MMSE drawing canvas supports mouse + touch (Pointer Events, `touch-none`).
-- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `ExaminerToggle`, `SectionShell`).
+- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `PatientResponse`, `ExaminerScoring`, `ScoredResponse`, `SectionShell`, `inputClass`).
 
 > **Do not redesign the application unless explicitly requested.**
 
@@ -350,9 +351,10 @@ alzheimers_ml_project/
 ### Last Completed Work
 - Implemented the full examiner-assisted 11-section MMSE questionnaire (frontend only) replacing the raw MMSE number input; final score `mmse: totalMMSE` (0–30) flows through the existing `POST /predict` path. Backend/API/model untouched. `npm run build` (tsc + vite) passes.
 - Verification pass: confirmed all 11 sections total 30, every section feeds `totalMMSE` (integer 0–30), state persists across back/forward, registration objects reused in delayed recall, examiner-only scoring, final score assigned to `formData.mmse`, `/predict` payload unchanged (5 fields), backend untouched. Fixed one UX issue: `EmptyState` now supports contextual `title`/`description`/`showAnalyze` props; `App.tsx` renders an MMSE-contextual right panel during the assessment phase (Analyze button hidden).
+- **Response-recording UX upgrade:** every MMSE question now records the patient's actual response (`PatientResponse` input) separately from the examiner's Correct/Incorrect mark (`ExaminerScoring`). State uses `ItemState { response, correct }` so response text and score are never mixed; responses are never auto-scored. Spell-WORLD records a single full response + per-letter scores. Three-step command keeps examiner observations ("Done correctly"/"Incorrect"); Reading gains an optional examiner note. Scoring still integer 0–30; payload and backend untouched.
 
 ### Current State
-- Working tree: MMSE implementation committed and pushed. Git branch `main`, tracking `origin/main`. This verification-pass fix (EmptyState context) is the only pending change.
+- Working tree: MMSE implementation committed and pushed. Git branch `main`, tracking `origin/main`. This response-recording upgrade is the only pending change.
 
 ### Next Recommended Task
 - Supply the exact MMSE copying figure as an image asset, place it under `frontend/public/`, and set `COPYING_REFERENCE_IMAGE` in `frontend/src/mmse/config.ts`.
@@ -360,16 +362,15 @@ alzheimers_ml_project/
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
-- `frontend/src/App.tsx` (MMSE phase + score integration; contextual EmptyState during MMSE phase)
-- `frontend/src/components/index.ts` (new exports)
-- `frontend/src/components/mmse/*` (new MMSE UI)
-- `frontend/src/components/EmptyState.tsx` (contextual title/description/showAnalyze props)
-- `frontend/src/mmse/state.ts`, `frontend/src/mmse/config.ts` (new MMSE logic/config)
+- `frontend/src/components/mmse/primitives.tsx` (`PatientResponse`, `ExaminerScoring`, `ScoredResponse`, `inputClass`)
+- `frontend/src/components/mmse/sections.tsx` (all sections use response + scoring flow)
+- `frontend/src/mmse/state.ts` (`ItemState` model, `orientationTime.items`, `attention.spellWorld` shape)
+- `frontend/src/mmse/config.ts` (`ORIENTATION_TIME_ITEMS` key type)
+- Earlier: `frontend/src/App.tsx`, `frontend/src/components/index.ts`, `frontend/src/components/EmptyState.tsx`
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
-- Dev server boots cleanly (`vite`).
-- Confirmed MMSE strings present in the production bundle.
+- Dev server boots cleanly (`vite`), serves HTTP 200.
 - No backend tests exist; backend left untouched.
 
 ### Commit

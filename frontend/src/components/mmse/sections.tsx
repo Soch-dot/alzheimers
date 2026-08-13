@@ -17,8 +17,11 @@ import {
 } from '../../mmse/config';
 import {
   ExaminerInstructions,
-  ExaminerToggle,
+  ExaminerScoring,
+  PatientResponse,
+  ScoredResponse,
   SectionShell,
+  inputClass,
 } from './primitives';
 import { DrawingCanvas } from './DrawingCanvas';
 
@@ -26,9 +29,6 @@ export interface SectionProps {
   state: MMSEState;
   update: (updater: (draft: MMSEState) => void) => void;
 }
-
-const inputClass =
-  'w-full px-4 py-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400/50 focus:bg-white/10 transition-all duration-200 placeholder:text-gray-600';
 
 export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update }) => {
   return (
@@ -38,19 +38,27 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update }
       maxScore={5}
       instructions={
         <ExaminerInstructions>
-          Ask the patient the five questions below one at a time. Give 1 point
-          for each correct answer.
+          Ask the patient the five questions below one at a time. Record the
+          patient&apos;s actual response, then give 1 point for each correct
+          answer.
         </ExaminerInstructions>
       }
     >
       {ORIENTATION_TIME_ITEMS.map((item) => (
-        <ExaminerToggle
+        <ScoredResponse
           key={item.key}
-          label={item.prompt}
-          value={state.orientationTime[item.key]}
-          onChange={(value) =>
+          prompt={item.prompt}
+          response={state.orientationTime.items[item.key].response}
+          onResponseChange={(value) =>
             update((draft) => {
-              draft.orientationTime[item.key] = value;
+              draft.orientationTime.items[item.key].response = value;
+            })
+          }
+          responsePlaceholder="Patient's response"
+          score={state.orientationTime.items[item.key].correct}
+          onScoreChange={(value) =>
+            update((draft) => {
+              draft.orientationTime.items[item.key].correct = value;
             })
           }
         />
@@ -68,46 +76,37 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update 
       instructions={
         <ExaminerInstructions>
           Ask the patient the five questions below. Correct answers depend on the
-          assessment location. Record the patient&apos;s answer (optional) and
-          mark each item correct or incorrect.
+          assessment location. Record the patient&apos;s actual response, then
+          mark each item correct or incorrect. Do not show the expected answer to
+          the patient.
         </ExaminerInstructions>
       }
     >
       {PLACE_ITEMS.map((item) => {
         const placeItem = state.orientationPlace.items[item.key];
         return (
-          <div key={item.key} className="space-y-2">
-            <p className="text-sm font-medium text-white">{item.prompt}</p>
-            {item.expected ? (
-              <p className="text-xs text-gray-500">Expected answer: {item.expected}</p>
-            ) : (
-              <p className="text-xs text-gray-500">
-                Expected answer: set per location in <code className="text-gray-400">src/mmse/config.ts</code>
-              </p>
-            )}
-            <input
-              type="text"
-              value={placeItem.response}
-              onChange={(event) =>
-                update((draft) => {
-                  draft.orientationPlace.items[item.key].response =
-                    event.target.value;
-                })
-              }
-              placeholder="Patient's answer (record)"
-              className={inputClass}
-            />
-            <ExaminerToggle
-              label="Answered correctly?"
-              value={placeItem.correct}
-              onChange={(value) =>
-                update((draft) => {
-                  draft.orientationPlace.items[item.key].correct =
-                    value;
-                })
-              }
-            />
-          </div>
+          <ScoredResponse
+            key={item.key}
+            prompt={item.prompt}
+            hint={
+              item.expected
+                ? `Expected answer: ${item.expected}`
+                : 'Expected answer: set per location in src/mmse/config.ts'
+            }
+            response={placeItem.response}
+            onResponseChange={(value) =>
+              update((draft) => {
+                draft.orientationPlace.items[item.key].response = value;
+              })
+            }
+            responsePlaceholder="Patient's response"
+            score={placeItem.correct}
+            onScoreChange={(value) =>
+              update((draft) => {
+                draft.orientationPlace.items[item.key].correct = value;
+              })
+            }
+          />
         );
       })}
     </SectionShell>
@@ -124,12 +123,13 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update }) =
         <ExaminerInstructions>
           Say: &ldquo;I am going to name three objects. After I say them, I want you
           to repeat them back to me.&rdquo; Name the three objects one second apart.
-          Give 1 point for each object the patient repeats correctly. The same
-          objects are used again in the Delayed Recall section.
+          Record the patient&apos;s repetition of each object, then give 1 point
+          for each object repeated correctly. The same objects are used again in
+          the Delayed Recall section.
           <ul className="mt-3 space-y-1">
-            {REGISTRATION_OBJECTS.map((obj) => (
+            {REGISTRATION_OBJECTS.map((obj, index) => (
               <li key={obj} className="font-medium text-white">
-                {obj}
+                {index + 1}. {obj}
               </li>
             ))}
           </ul>
@@ -137,13 +137,20 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update }) =
       }
     >
       {REGISTRATION_OBJECTS.map((obj, index) => (
-        <ExaminerToggle
+        <ScoredResponse
           key={obj}
-          label={`Object ${index + 1} — ${obj}`}
-          value={state.registration.recalled[index]}
-          onChange={(value) =>
+          prompt={`Object ${index + 1}`}
+          response={state.registration.items[index].response}
+          onResponseChange={(value) =>
             update((draft) => {
-              draft.registration.recalled[index] = value;
+              draft.registration.items[index].response = value;
+            })
+          }
+          responsePlaceholder="Patient's response"
+          score={state.registration.items[index].correct}
+          onScoreChange={(value) =>
+            update((draft) => {
+              draft.registration.items[index].correct = value;
             })
           }
         />
@@ -154,9 +161,6 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update }) =
 
 export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
   const isSerial7 = state.attention.task === 'serial7';
-  const marks = isSerial7 ? state.attention.serial7 : state.attention.spellWorld;
-  const expected = isSerial7 ? SERIAL_7_EXPECTED : SPELL_WORLD_EXPECTED;
-  const itemLabel = isSerial7 ? 'Subtraction' : 'Letter';
 
   return (
     <SectionShell
@@ -165,8 +169,9 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
       maxScore={5}
       instructions={
         <ExaminerInstructions>
-          Administer one of the two tasks below. Give 1 point for each correct
-          response. Do not show the expected answers to the patient.
+          Administer one of the two tasks below. Record the patient&apos;s
+          responses, then give 1 point for each correct response. Do not show the
+          expected answers to the patient.
           {isSerial7 ? (
             <p className="mt-2 text-gray-400">
               Say: &ldquo;Now I would like you to subtract 7 from 100 and keep
@@ -175,9 +180,9 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
             </p>
           ) : (
             <p className="mt-2 text-gray-400">
-              Say: &ldquo;Spell the word WORLD backwards.&rdquo; Expected responses:{' '}
-              {SPELL_WORLD_EXPECTED.join(', ')} — 1 point per correct letter in the
-              correct position.
+              Say: &ldquo;Spell the word WORLD backwards.&rdquo; Record the full
+              response, then score each letter in the correct position. Expected
+              letters: {SPELL_WORLD_EXPECTED.join(', ')}.
             </p>
           )}
         </ExaminerInstructions>
@@ -204,23 +209,72 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
         ))}
       </div>
       <div className="pt-1">
-        {marks.map((mark, index) => (
-          <ExaminerToggle
-            key={`${state.attention.task}-${index}`}
-            label={`${itemLabel} ${index + 1}`}
-            hint={expected[index] ? `Expected: ${expected[index]}` : undefined}
-            value={mark}
-            onChange={(value) =>
-              update((draft) => {
-                if (isSerial7) {
-                  draft.attention.serial7[index] = value;
-                } else {
-                  draft.attention.spellWorld[index] = value;
-                }
-              })
-            }
-          />
-        ))}
+        {isSerial7 ? (
+          state.attention.serial7.map((item, index) => (
+            <ScoredResponse
+              key={`serial7-${index}`}
+              prompt={`Response ${index + 1}`}
+              hint={
+                SERIAL_7_EXPECTED[index]
+                  ? `Expected: ${SERIAL_7_EXPECTED[index]}`
+                  : undefined
+              }
+              response={item.response}
+              onResponseChange={(value) =>
+                update((draft) => {
+                  draft.attention.serial7[index].response = value;
+                })
+              }
+              responsePlaceholder="Patient's response"
+              score={item.correct}
+              onScoreChange={(value) =>
+                update((draft) => {
+                  draft.attention.serial7[index].correct = value;
+                })
+              }
+            />
+          ))
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-white">
+                Spell the word WORLD backwards
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Score each letter only if it is in the correct position.
+              </p>
+            </div>
+            <PatientResponse
+              value={state.attention.spellWorld.response}
+              onChange={(value) =>
+                update((draft) => {
+                  draft.attention.spellWorld.response = value;
+                })
+              }
+              placeholder="Patient's full response"
+            />
+            <div className="pt-4 border-t border-white/10 space-y-3">
+              {state.attention.spellWorld.letters.map((item, index) => (
+                <ExaminerScoring
+                  key={`letter-${index}`}
+                  label={`Letter ${index + 1}`}
+                  labelVariant="row"
+                  hint={
+                    SPELL_WORLD_EXPECTED[index]
+                      ? `Expected: ${SPELL_WORLD_EXPECTED[index]}`
+                      : undefined
+                  }
+                  value={item.correct}
+                  onChange={(value) =>
+                    update((draft) => {
+                      draft.attention.spellWorld.letters[index].correct = value;
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </SectionShell>
   );
@@ -234,27 +288,35 @@ export const DelayedRecallSection: React.FC<SectionProps> = ({ state, update }) 
       maxScore={3}
       instructions={
         <ExaminerInstructions>
-          Ask: &ldquo;Earlier I named three objects. What were they?&rdquo; Give 1
+          Ask: &ldquo;Earlier I told you the names of three things. Can you tell
+          me what those were?&rdquo; Record the patient&apos;s recall, then give 1
           point for each object correctly recalled. Objects presented during
           Registration:
           <ul className="mt-3 space-y-1">
-            {REGISTRATION_OBJECTS.map((obj) => (
+            {REGISTRATION_OBJECTS.map((obj, index) => (
               <li key={obj} className="font-medium text-white">
-                {obj}
+                {index + 1}. {obj}
               </li>
             ))}
           </ul>
         </ExaminerInstructions>
       }
     >
-      {state.delayedRecall.recalled.map((mark, index) => (
-        <ExaminerToggle
+      {state.delayedRecall.items.map((item, index) => (
+        <ScoredResponse
           key={index}
-          label={`Object ${index + 1}`}
-          value={mark}
-          onChange={(value) =>
+          prompt={`Response ${index + 1}`}
+          response={item.response}
+          onResponseChange={(value) =>
             update((draft) => {
-              draft.delayedRecall.recalled[index] = value;
+              draft.delayedRecall.items[index].response = value;
+            })
+          }
+          responsePlaceholder="Patient's response"
+          score={item.correct}
+          onScoreChange={(value) =>
+            update((draft) => {
+              draft.delayedRecall.items[index].correct = value;
             })
           }
         />
@@ -271,32 +333,59 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update }) => {
       maxScore={2}
       instructions={
         <ExaminerInstructions>
-          Point to or show each item and ask: &ldquo;What is this?&rdquo; Give 1
-          point for each item correctly named. The patient answers verbally.
+          Point to or show each item and ask: &ldquo;What is this?&rdquo; Record
+          the patient&apos;s response, then give 1 point for each item correctly
+          named. The patient answers verbally.
         </ExaminerInstructions>
       }
     >
-      {NAMING_ITEMS.map((item) => (
-        <div
-          key={item}
-          className="rounded-xl border border-white/10 bg-white/[0.03] p-5 flex flex-col items-center gap-4"
-        >
-          <span className="text-lg font-semibold text-white">{item}</span>
-          <ExaminerToggle
-            label={item === 'Wristwatch' ? 'Watch named correctly' : 'Pencil named correctly'}
-            value={item === 'Wristwatch' ? state.naming.watch : state.naming.pencil}
-            onChange={(value) =>
-              update((draft) => {
-                if (item === 'Wristwatch') {
-                  draft.naming.watch = value;
-                } else {
-                  draft.naming.pencil = value;
+      {NAMING_ITEMS.map((item) => {
+        const isWatch = item === 'Wristwatch';
+        const naming = isWatch ? state.naming.watch : state.naming.pencil;
+        return (
+          <div
+            key={item}
+            className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4"
+          >
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="text-lg font-semibold text-white">{item}</span>
+              <p className="text-sm text-gray-400">&ldquo;What is this?&rdquo;</p>
+            </div>
+            <PatientResponse
+              value={naming.response}
+              onChange={(value) =>
+                update((draft) => {
+                  if (isWatch) {
+                    draft.naming.watch.response = value;
+                  } else {
+                    draft.naming.pencil.response = value;
+                  }
+                })
+              }
+              placeholder="Patient's response"
+            />
+            <div className="pt-4 border-t border-white/10">
+              <ExaminerScoring
+                label={
+                  isWatch
+                    ? 'Examiner scoring — watch named correctly'
+                    : 'Examiner scoring — pencil named correctly'
                 }
-              })
-            }
-          />
-        </div>
-      ))}
+                value={naming.correct}
+                onChange={(value) =>
+                  update((draft) => {
+                    if (isWatch) {
+                      draft.naming.watch.correct = value;
+                    } else {
+                      draft.naming.pencil.correct = value;
+                    }
+                  })
+                }
+              />
+            </div>
+          </div>
+        );
+      })}
     </SectionShell>
   );
 };
@@ -310,20 +399,28 @@ export const RepetitionSection: React.FC<SectionProps> = ({ state, update }) => 
       instructions={
         <ExaminerInstructions>
           Say: &ldquo;I am going to say a phrase. Please repeat it exactly: No ifs,
-          ands, or buts.&rdquo; Give 1 point if the patient repeats it correctly on
-          the first try.
+          ands, or buts.&rdquo; Record the patient&apos;s actual response, then give
+          1 point if it is repeated correctly on the first try.
         </ExaminerInstructions>
       }
     >
       <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6 text-center">
+        <p className="text-sm text-gray-400 mb-1">Phrase to repeat</p>
         <p className="text-lg italic text-white">&ldquo;{REPETITION_PHRASE}&rdquo;</p>
       </div>
-      <ExaminerToggle
-        label="Repeated the phrase correctly"
-        value={state.repetition}
-        onChange={(value) =>
+      <ScoredResponse
+        prompt="Repeat the phrase for the patient, then record their response"
+        response={state.repetition.response}
+        onResponseChange={(value) =>
           update((draft) => {
-            draft.repetition = value;
+            draft.repetition.response = value;
+          })
+        }
+        responsePlaceholder="Patient's response"
+        score={state.repetition.correct}
+        onScoreChange={(value) =>
+          update((draft) => {
+            draft.repetition.correct = value;
           })
         }
       />
@@ -341,17 +438,25 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update 
         <ExaminerInstructions>
           Give the patient a blank piece of paper, then say: &ldquo;Take the paper in
           your right hand, fold it in half, and put it on the floor.&rdquo; Score each
-          action independently.
+          action independently based on what you observe. The patient does not
+          type anything.
         </ExaminerInstructions>
       }
     >
       <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+        <p className="text-sm text-gray-400 mb-1">Command to give the patient</p>
         <p className="text-sm text-gray-300 italic">
           &ldquo;{THREE_STEP_COMMAND_TEXT}&rdquo;
         </p>
       </div>
-      <ExaminerToggle
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 pt-1">
+        Examiner observations
+      </p>
+      <ExaminerScoring
         label="Took the paper in the right hand"
+        labelVariant="row"
+        correctLabel="Done correctly"
+        incorrectLabel="Incorrect"
         value={state.command.tookPaper}
         onChange={(value) =>
           update((draft) => {
@@ -359,8 +464,11 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update 
           })
         }
       />
-      <ExaminerToggle
+      <ExaminerScoring
         label="Folded the paper in half"
+        labelVariant="row"
+        correctLabel="Done correctly"
+        incorrectLabel="Incorrect"
         value={state.command.foldedPaper}
         onChange={(value) =>
           update((draft) => {
@@ -368,8 +476,11 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update 
           })
         }
       />
-      <ExaminerToggle
+      <ExaminerScoring
         label="Put the paper on the floor"
+        labelVariant="row"
+        correctLabel="Done correctly"
+        incorrectLabel="Incorrect"
         value={state.command.placedFloor}
         onChange={(value) =>
           update((draft) => {
@@ -399,15 +510,39 @@ export const ReadingSection: React.FC<SectionProps> = ({ state, update }) => {
           {READING_INSTRUCTION}
         </p>
       </div>
-      <ExaminerToggle
-        label="Followed the instruction (closed eyes)"
-        value={state.reading}
-        onChange={(value) =>
-          update((draft) => {
-            draft.reading = value;
-          })
-        }
-      />
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-white">
+            Did the patient read and perform the instruction?
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+            Examiner note <span className="normal-case tracking-normal text-gray-500">(optional)</span>
+          </p>
+          <input
+            type="text"
+            value={state.reading.note}
+            onChange={(event) =>
+              update((draft) => {
+                draft.reading.note = event.target.value;
+              })
+            }
+            placeholder="Optional note"
+            className={inputClass}
+          />
+        </div>
+        <div className="pt-4 border-t border-white/10">
+          <ExaminerScoring
+            value={state.reading.correct}
+            onChange={(value) =>
+              update((draft) => {
+                draft.reading.correct = value;
+              })
+            }
+          />
+        </div>
+      </div>
     </SectionShell>
   );
 };
@@ -421,30 +556,35 @@ export const WritingSection: React.FC<SectionProps> = ({ state, update }) => {
       instructions={
         <ExaminerInstructions>
           Ask: &ldquo;{WRITING_PROMPT}&rdquo; Give 1 point if the sentence contains a
-          noun and a verb. Do not grade spelling or grammar automatically.
+          noun and a verb. Do not grade spelling or grammar automatically — the
+          examiner decides.
         </ExaminerInstructions>
       }
     >
-      <textarea
-        value={state.writing.response}
-        onChange={(event) =>
-          update((draft) => {
-            draft.writing.response = event.target.value;
-          })
-        }
-        placeholder="Sentence recorded by the examiner"
-        rows={4}
-        className={`${inputClass} resize-none`}
-      />
-      <ExaminerToggle
-        label="Sentence contains a noun and a verb"
-        value={state.writing.correct}
-        onChange={(value) =>
-          update((draft) => {
-            draft.writing.correct = value;
-          })
-        }
-      />
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
+        <p className="text-sm font-medium text-white">{WRITING_PROMPT}</p>
+        <PatientResponse
+          multiline
+          value={state.writing.response}
+          onChange={(value) =>
+            update((draft) => {
+              draft.writing.response = value;
+            })
+          }
+          placeholder="Sentence written by the patient"
+        />
+        <div className="pt-4 border-t border-white/10">
+          <ExaminerScoring
+            hint="Give 1 point if the sentence contains a noun and a verb"
+            value={state.writing.correct}
+            onChange={(value) =>
+              update((draft) => {
+                draft.writing.correct = value;
+              })
+            }
+          />
+        </div>
+      </div>
     </SectionShell>
   );
 };
@@ -458,39 +598,45 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update }) => {
       instructions={
         <ExaminerInstructions>
           Show the reference figure to the patient and ask them to copy it as
-          exactly as possible. The examiner remains the final scorer.
+          exactly as possible. The examiner remains the final scorer — the drawing
+          is never auto-scored.
         </ExaminerInstructions>
       }
     >
-      {COPYING_REFERENCE_IMAGE ? (
-        <img
-          src={COPYING_REFERENCE_IMAGE}
-          alt="Reference figure from the MMSE questionnaire"
-          className="w-full max-h-64 object-contain rounded-xl border border-white/10 bg-white/[0.03]"
-        />
-      ) : (
-        <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center">
-          <p className="text-sm text-gray-400">
-            The reference figure from the MMSE questionnaire is not bundled with
-            this project.
-          </p>
-          <p className="text-sm text-gray-400 mt-2">
-            Supply the exact figure as an image asset and set its path in{' '}
-            <code className="text-gray-300">src/mmse/config.ts</code>
-            (COPYING_REFERENCE_IMAGE).
-          </p>
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-white">Please copy this picture.</p>
+        {COPYING_REFERENCE_IMAGE ? (
+          <img
+            src={COPYING_REFERENCE_IMAGE}
+            alt="Reference figure from the MMSE questionnaire"
+            className="w-full max-h-64 object-contain rounded-xl border border-white/10 bg-white/[0.03]"
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center">
+            <p className="text-sm text-gray-400">
+              The reference figure from the MMSE questionnaire is not bundled with
+              this project.
+            </p>
+            <p className="text-sm text-gray-400 mt-2">
+              Supply the exact figure as an image asset and set its path in{' '}
+              <code className="text-gray-300">src/mmse/config.ts</code>
+              (COPYING_REFERENCE_IMAGE).
+            </p>
+          </div>
+        )}
+        <DrawingCanvas />
+        <div className="pt-3 border-t border-white/10">
+          <ExaminerScoring
+            hint="Judge the copy visually; do not auto-score the drawing"
+            value={state.copying}
+            onChange={(value) =>
+              update((draft) => {
+                draft.copying = value;
+              })
+            }
+          />
         </div>
-      )}
-      <DrawingCanvas />
-      <ExaminerToggle
-        label="Copy is acceptable"
-        value={state.copying}
-        onChange={(value) =>
-          update((draft) => {
-            draft.copying = value;
-          })
-        }
-      />
+      </div>
     </SectionShell>
   );
 };

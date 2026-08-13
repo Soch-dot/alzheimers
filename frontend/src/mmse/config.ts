@@ -1,8 +1,8 @@
 import type {
   AttentionTask,
-  OrientationTimeState,
   PlaceKey,
   SectionId,
+  TimeKey,
 } from './state';
 
 export const MMSE_SECTIONS: { id: SectionId; title: string; max: number }[] = [
@@ -20,7 +20,7 @@ export const MMSE_SECTIONS: { id: SectionId; title: string; max: number }[] = [
 ];
 
 export const ORIENTATION_TIME_ITEMS: {
-  key: keyof OrientationTimeState;
+  key: TimeKey;
   label: string;
   prompt: string;
 }[] = [

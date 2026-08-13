@@ -1,43 +1,51 @@
 export type ScoreMark = boolean | null;
 
-export interface OrientationTimeState {
-  year: ScoreMark;
-  season: ScoreMark;
-  date: ScoreMark;
-  day: ScoreMark;
-  month: ScoreMark;
-}
-
-export type PlaceKey = 'state' | 'county' | 'town' | 'building' | 'floor';
-
-export interface PlaceItemState {
+/**
+ * Patient responses are stored separately from examiner scores:
+ * `response` records the patient's actual answer text (never auto-scored),
+ * `correct` is the examiner's independent Correct/Incorrect mark.
+ */
+export interface ItemState {
   response: string;
   correct: ScoreMark;
 }
 
+export type TimeKey = 'year' | 'season' | 'date' | 'day' | 'month';
+
+export interface OrientationTimeState {
+  items: Record<TimeKey, ItemState>;
+}
+
+export type PlaceKey = 'state' | 'county' | 'town' | 'building' | 'floor';
+
 export interface OrientationPlaceState {
-  items: Record<PlaceKey, PlaceItemState>;
+  items: Record<PlaceKey, ItemState>;
 }
 
 export interface RegistrationState {
-  recalled: [ScoreMark, ScoreMark, ScoreMark];
+  items: [ItemState, ItemState, ItemState];
 }
 
 export type AttentionTask = 'serial7' | 'spellWorld';
 
+export interface SpellWorldState {
+  response: string;
+  letters: [ItemState, ItemState, ItemState, ItemState, ItemState];
+}
+
 export interface AttentionState {
   task: AttentionTask;
-  serial7: [ScoreMark, ScoreMark, ScoreMark, ScoreMark, ScoreMark];
-  spellWorld: [ScoreMark, ScoreMark, ScoreMark, ScoreMark, ScoreMark];
+  serial7: [ItemState, ItemState, ItemState, ItemState, ItemState];
+  spellWorld: SpellWorldState;
 }
 
 export interface DelayedRecallState {
-  recalled: [ScoreMark, ScoreMark, ScoreMark];
+  items: [ItemState, ItemState, ItemState];
 }
 
 export interface NamingState {
-  watch: ScoreMark;
-  pencil: ScoreMark;
+  watch: ItemState;
+  pencil: ItemState;
 }
 
 export interface CommandState {
@@ -46,8 +54,8 @@ export interface CommandState {
   placedFloor: ScoreMark;
 }
 
-export interface WritingState {
-  response: string;
+export interface ReadingState {
+  note: string;
   correct: ScoreMark;
 }
 
@@ -58,10 +66,10 @@ export interface MMSEState {
   attention: AttentionState;
   delayedRecall: DelayedRecallState;
   naming: NamingState;
-  repetition: ScoreMark;
+  repetition: ItemState;
   command: CommandState;
-  reading: ScoreMark;
-  writing: WritingState;
+  reading: ReadingState;
+  writing: ItemState;
   copying: ScoreMark;
 }
 
@@ -78,36 +86,45 @@ export type SectionId =
   | 'writing'
   | 'copying';
 
+function blank(): ItemState {
+  return { response: '', correct: null };
+}
+
 export function createInitialMMSEState(): MMSEState {
   return {
     orientationTime: {
-      year: null,
-      season: null,
-      date: null,
-      day: null,
-      month: null,
+      items: {
+        year: blank(),
+        season: blank(),
+        date: blank(),
+        day: blank(),
+        month: blank(),
+      },
     },
     orientationPlace: {
       items: {
-        state: { response: '', correct: null },
-        county: { response: '', correct: null },
-        town: { response: '', correct: null },
-        building: { response: '', correct: null },
-        floor: { response: '', correct: null },
+        state: blank(),
+        county: blank(),
+        town: blank(),
+        building: blank(),
+        floor: blank(),
       },
     },
-    registration: { recalled: [null, null, null] },
+    registration: { items: [blank(), blank(), blank()] },
     attention: {
       task: 'serial7',
-      serial7: [null, null, null, null, null],
-      spellWorld: [null, null, null, null, null],
+      serial7: [blank(), blank(), blank(), blank(), blank()],
+      spellWorld: {
+        response: '',
+        letters: [blank(), blank(), blank(), blank(), blank()],
+      },
     },
-    delayedRecall: { recalled: [null, null, null] },
-    naming: { watch: null, pencil: null },
-    repetition: null,
+    delayedRecall: { items: [blank(), blank(), blank()] },
+    naming: { watch: blank(), pencil: blank() },
+    repetition: blank(),
     command: { tookPaper: null, foldedPaper: null, placedFloor: null },
-    reading: null,
-    writing: { response: '', correct: null },
+    reading: { note: '', correct: null },
+    writing: blank(),
     copying: null,
   };
 }
@@ -132,25 +149,29 @@ export interface MMSEScores {
 
 export function computeScores(state: MMSEState): MMSEScores {
   return {
-    orientationTime: count(Object.values(state.orientationTime)),
+    orientationTime: count(
+      Object.values(state.orientationTime.items).map((item) => item.correct)
+    ),
     orientationPlace: count(
       Object.values(state.orientationPlace.items).map((item) => item.correct)
     ),
-    registration: count([...state.registration.recalled]),
+    registration: count(state.registration.items.map((item) => item.correct)),
     attention: count(
-      state.attention.task === 'serial7'
-        ? [...state.attention.serial7]
-        : [...state.attention.spellWorld]
+      (
+        state.attention.task === 'serial7'
+          ? state.attention.serial7
+          : state.attention.spellWorld.letters
+      ).map((item) => item.correct)
     ),
-    delayedRecall: count([...state.delayedRecall.recalled]),
-    naming: count([state.naming.watch, state.naming.pencil]),
-    repetition: state.repetition === true ? 1 : 0,
+    delayedRecall: count(state.delayedRecall.items.map((item) => item.correct)),
+    naming: count([state.naming.watch.correct, state.naming.pencil.correct]),
+    repetition: state.repetition.correct === true ? 1 : 0,
     command: count([
       state.command.tookPaper,
       state.command.foldedPaper,
       state.command.placedFloor,
     ]),
-    reading: state.reading === true ? 1 : 0,
+    reading: state.reading.correct === true ? 1 : 0,
     writing: state.writing.correct === true ? 1 : 0,
     copying: state.copying === true ? 1 : 0,
   };
@@ -176,23 +197,30 @@ export function computeTotal(state: MMSEState): number {
 export function isSectionComplete(id: SectionId, state: MMSEState): boolean {
   switch (id) {
     case 'orientationTime':
-      return Object.values(state.orientationTime).every((mark) => mark !== null);
+      return Object.values(state.orientationTime.items).every(
+        (item) => item.correct !== null
+      );
     case 'orientationPlace':
       return Object.values(state.orientationPlace.items).every(
         (item) => item.correct !== null
       );
     case 'registration':
-      return state.registration.recalled.every((mark) => mark !== null);
+      return state.registration.items.every((item) => item.correct !== null);
     case 'attention':
       return state.attention.task === 'serial7'
-        ? state.attention.serial7.every((mark) => mark !== null)
-        : state.attention.spellWorld.every((mark) => mark !== null);
+        ? state.attention.serial7.every((item) => item.correct !== null)
+        : state.attention.spellWorld.letters.every(
+            (item) => item.correct !== null
+          );
     case 'delayedRecall':
-      return state.delayedRecall.recalled.every((mark) => mark !== null);
+      return state.delayedRecall.items.every((item) => item.correct !== null);
     case 'naming':
-      return state.naming.watch !== null && state.naming.pencil !== null;
+      return (
+        state.naming.watch.correct !== null &&
+        state.naming.pencil.correct !== null
+      );
     case 'repetition':
-      return state.repetition !== null;
+      return state.repetition.correct !== null;
     case 'command':
       return (
         state.command.tookPaper !== null &&
@@ -200,7 +228,7 @@ export function isSectionComplete(id: SectionId, state: MMSEState): boolean {
         state.command.placedFloor !== null
       );
     case 'reading':
-      return state.reading !== null;
+      return state.reading.correct !== null;
     case 'writing':
       return state.writing.correct !== null;
     case 'copying':

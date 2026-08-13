@@ -34,22 +34,94 @@ export const ExaminerInstructions: React.FC<ExaminerInstructionsProps> = ({ chil
   );
 };
 
-interface ExaminerToggleProps {
-  label: string;
+export const inputClass =
+  'w-full px-4 py-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400/50 focus:bg-white/10 transition-all duration-200 placeholder:text-gray-600';
+
+const labelClass =
+  'text-[11px] font-semibold uppercase tracking-[0.08em] mb-2';
+
+interface PatientResponseProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+}
+
+/**
+ * Records the patient's actual response. Never auto-scores the text — the
+ * examiner decides correctness separately via ExaminerScoring.
+ */
+export const PatientResponse: React.FC<PatientResponseProps> = ({
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
+}) => {
+  return (
+    <div>
+      <p className={`${labelClass} text-gray-400`}>Patient response</p>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          rows={4}
+          className={`${inputClass} resize-none`}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={inputClass}
+        />
+      )}
+    </div>
+  );
+};
+
+interface ExaminerScoringProps {
+  /** Short section label. Defaults to "Examiner scoring". */
+  label?: string;
+  /** For action rows, render the label as a normal text row instead of a micro-label. */
+  labelVariant?: 'label' | 'row';
   hint?: string;
+  correctLabel?: string;
+  incorrectLabel?: string;
   value: ScoreMark;
   onChange: (value: ScoreMark) => void;
 }
 
-export const ExaminerToggle: React.FC<ExaminerToggleProps> = ({ label, hint, value, onChange }) => {
+/**
+ * Examiner-controlled Correct / Incorrect mark, visually separated from the
+ * patient's response. Clicking the selected option clears the mark.
+ */
+export const ExaminerScoring: React.FC<ExaminerScoringProps> = ({
+  label = 'Examiner scoring',
+  labelVariant = 'label',
+  hint,
+  correctLabel = 'Correct',
+  incorrectLabel = 'Incorrect',
+  value,
+  onChange,
+}) => {
   const select = (next: boolean) => {
     onChange(value === next ? null : next);
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-white">{label}</p>
+        <p
+          className={
+            labelVariant === 'row'
+              ? 'text-sm font-medium text-white'
+              : `${labelClass} text-blue-300/80`
+          }
+        >
+          {label}
+        </p>
         {hint && <p className="text-xs text-gray-500 mt-0.5">{hint}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -62,7 +134,7 @@ export const ExaminerToggle: React.FC<ExaminerToggleProps> = ({ label, hint, val
               : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
           }`}
         >
-          Correct
+          {correctLabel}
         </button>
         <button
           type="button"
@@ -73,8 +145,68 @@ export const ExaminerToggle: React.FC<ExaminerToggleProps> = ({ label, hint, val
               : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
           }`}
         >
-          Incorrect
+          {incorrectLabel}
         </button>
+      </div>
+    </div>
+  );
+};
+
+interface ScoredResponseProps {
+  /** Optional content rendered above the prompt (e.g. an object card). */
+  top?: React.ReactNode;
+  prompt: string;
+  hint?: string;
+  response: string;
+  onResponseChange: (value: string) => void;
+  responsePlaceholder?: string;
+  responseMultiline?: boolean;
+  score: ScoreMark;
+  onScoreChange: (value: ScoreMark) => void;
+  scoringLabel?: string;
+  correctLabel?: string;
+  incorrectLabel?: string;
+}
+
+/**
+ * Standard item layout: question → patient response → examiner scoring,
+ * with a clear visual separation between the two.
+ */
+export const ScoredResponse: React.FC<ScoredResponseProps> = ({
+  top,
+  prompt,
+  hint,
+  response,
+  onResponseChange,
+  responsePlaceholder,
+  responseMultiline,
+  score,
+  onScoreChange,
+  scoringLabel,
+  correctLabel,
+  incorrectLabel,
+}) => {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
+      {top}
+      <div>
+        <p className="text-sm font-medium text-white">{prompt}</p>
+        {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      </div>
+      <PatientResponse
+        value={response}
+        onChange={onResponseChange}
+        placeholder={responsePlaceholder}
+        multiline={responseMultiline}
+      />
+      <div className="pt-4 border-t border-white/10">
+        <ExaminerScoring
+          label={scoringLabel}
+          correctLabel={correctLabel}
+          incorrectLabel={incorrectLabel}
+          value={score}
+          onChange={onScoreChange}
+        />
       </div>
     </div>
   );
