@@ -31,7 +31,8 @@
 - Provider-agnostic AI service (Ollama or Gemini); failure/timeout always resolves to a clear error with Retry + Manual review — never an indefinite spinner. **Raw OS/network/backend error text is never shown in the normal UI** — it lives behind a collapsed "View technical details" disclosure or console.
 - **Location-aware Orientation to Place:** the examiner configures the assessment location (state / county / town / building / floor) in a clean in-app form at the top of the section; those values are the reference answers for the batch and are never shown to the patient. No source-code paths or developer config exposed.
 - **Semantic response evaluation:** the AI judges the *meaning* of a response, not its formatting (case/punctuation/spacing/number-as-words/synonyms are not penalized). Results display as "✓ Correct response" / "✕ Incorrect response" / "⚠ Review required" / "Response required".
-- **Observation-based sections** (Three-Step Command, Reading, Copying) are clearly labelled as such, with an "AI vision assistance will be added in a later milestone" note — the examiner is not presented as the intended permanent scorer.
+- **Observation-based sections** (Three-Step Command, Reading) are clearly labelled as such, with an "AI vision assistance will be added in a later milestone" note — the examiner is not presented as the intended permanent scorer.
+- **Q11 photo-based vision assessment (UI):** the Copying section now runs a photo flow — reference figure → patient copies on paper → examiner takes/uploads a photo → preview → explicit "Analyze Drawing" → `POST /mmse/copying/evaluate` → normalized result with confidence + `review_required` → examiner accepts/overrides. The on-screen drawing canvas was removed. Photo preview is an in-memory data URL only (never persisted to disk/localStorage/backend). No auto-call on photo selection.
 - Browser speech capture (Web Speech API, no new dependency) with graceful degradation to typing; transcripts only populate the response field and never trigger AI.
 - Training-time static SHAP artifacts (plots + `shap_data.pkl`). **There is no live per-patient SHAP endpoint.**
 
@@ -41,13 +42,11 @@
 ### Planned (intentionally postponed)
 - Live per-patient SHAP explanations.
 - MoCA scoring (mentioned in README roadmap).
-- Vision-assisted evaluation of the MMSE copying figure.
 - MRI/imaging and multimodal input (long-term README roadmap).
 
 ### Rejected / Out of Scope (do NOT implement unless explicitly reconsidered)
 - Adding CDR (Clinical Dementia Rating) back as a feature — removed because it leaks the diagnosis (see Research Context).
 - Sending individual MMSE answers to the backend or adding 11 new MMSE API fields — the API contract stays 5 fields. (Per-item responses DO go to the separate `/mmse/evaluate` AI service, never to `/predict`.)
-- Automatic scoring of the copied figure (Question 11) — planned separately as a vision workflow (photograph → vision model → examiner review).
 - Automated vision scoring of the Reading instruction (Question 9) — currently examiner-observed; vision layer not implemented.
 
 ---
@@ -135,7 +134,7 @@ alzheimers_ml_project/
         ├── ResultCard.tsx, PredictionPieChart.tsx, EmptyState.tsx, ErrorMessage.tsx, LoadingSpinner.tsx (unused)
         └── mmse/                     # MMSE questionnaire UI (two-phase: collect → batch assess)
             ├── MMSEAssessment.tsx    # Stepper container (intro → 11 sections → summary) + batch orchestrator
-            ├── MMSEIntroduction.tsx, MMSESummary.tsx, DrawingCanvas.tsx, primitives.tsx, sections.tsx, index.ts
+            ├── MMSEIntroduction.tsx, MMSESummary.tsx, Q11PhotoAssessment.tsx, primitives.tsx, sections.tsx, index.ts
             # sections.tsx: 11 sections; OrientationPlace hosts the examiner-only assessment-location form
 ```
 
@@ -282,13 +281,13 @@ alzheimers_ml_project/
   8. Three-Step Command (3) — right hand / fold / floor; **observation-based** (badge + "AI vision assistance will be added in a later milestone"). Examiner records observations.
   9. Reading (1) — "CLOSE YOUR EYES"; **observation-based** + optional note. Automated vision scoring NOT implemented (documented limitation).
   10. Writing (1) — sentence with noun and verb; **AI-scored on that criterion only** (never spelling/grammar/handwriting/intelligence).
-  11. Copying (1) — reference figure + drawing canvas; **observation-based**. Vision workflow planned separately; placeholder for the missing figure remains (no developer text).
+  11. Copying (1) — reference figure + **photo-based vision assessment** (patient copies on paper → examiner photo → `POST /mmse/copying/evaluate` → normalized result → examiner accepts/overrides). Vision workflow complete (backend + UI); placeholder remains only if the figure asset is missing (not the case — asset is bundled).
 - **AI confidence:** model/service signal only, never clinical certainty. Confidence < `AI_CONFIDENCE_REVIEW_THRESHOLD` (0.7, config.ts) → item flagged "⚠ Review required"; it does not count as complete until the examiner accepts the AI result or overrides.
 - **Failure handling (never an indefinite spinner):** the batch resolves to success, error, or timeout.
   - Provider down/config off → Summary: "AI assessment unavailable" + "The selected AI provider is currently unavailable." + [Retry]. The raw OS/network error is **never shown in the normal UI** — it sits behind a "View technical details" disclosure.
   - Timeout (axios 90s) → "AI assessment timed out." + [Retry].
   - Partial failure → "Some responses could not be assessed." + [Review items] (+ re-assess for the still-missing items). Per-item failures show "AI assessment unavailable for this item." with technical detail behind a disclosure. Invalid AI output is never scored silently (goes to `errors`, item marked `error`).
-- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI. `MMSEState.location` holds the examiner-configured assessment location (reference answers for Orientation to Place).
+- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI. `MMSEState.location` holds the examiner-configured assessment location (reference answers for Orientation to Place). Q11 uses a dedicated `CopyingState { status: empty|photo|analyzing|assessed|error, previewData, previewName, aiScore, reviewRequired, reviewed, manual, errorKind, errorDetail }`; `copyingEffective()`/`isCopyingFinalized()` mirror the ItemState helpers. `previewData` is an in-memory data URL — never persisted.
 - **Speech capture:** `useSpeechRecognition()` in `primitives.tsx` uses the native Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`), no new dependency. A transcript only populates the response field — it never triggers AI. Unsupported browsers degrade to typing with a notice.
 - **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; during Phase 1 Next is enabled once the section's responses are complete (`isSectionResponseComplete`); after assessment it requires finalized scores (`isSectionComplete`); navigation is locked while the batch runs. Answers persist when navigating back.
@@ -327,16 +326,16 @@ alzheimers_ml_project/
 - [x] No AI calls while answering — typing/speech/Enter never triggers evaluation
 - [x] Location-aware Orientation to Place (examiner-configured assessment location; expected answers never shown to the patient)
 - [x] Semantic response evaluation (meaning, not formatting) with "✓ Correct response / ✕ Incorrect response / ⚠ Review required / Response required" display
-- [x] Observation-based sections clearly labelled (vision noted as a later milestone)
+- [x] Observation-based sections clearly labelled (Command/Reading; vision noted as a later milestone)
 - [x] Friendly error states with Retry + "View technical details" disclosure (raw OS/network errors never in the normal UI)
 - [x] Browser speech capture (Web Speech API) with typing fallback
 - [x] Examiner review/override of AI scores (incl. low-confidence review flow)
 - [x] Timeout/failure handling with Retry + Manual review (never stuck loading)
 - [x] MMSE score → existing prediction flow (single `mmse` field)
-- [x] Drawing canvas for copying task (mouse + touch)
+- [x] **Q11 photo-based vision assessment UI** (take/upload photo → preview → "Analyze Drawing" → normalized result → accept/override; on-screen canvas removed)
 - [x] Training-time static SHAP artifacts (plots + pickle)
 - [ ] Live per-patient SHAP explanations
-- [ ] Vision-assisted figure evaluation (Question 11)
+- [x] Vision-assisted figure evaluation (Question 11)
 - [ ] Vision-assisted reading evaluation (Question 9)
 - [ ] MoCA scoring
 
@@ -371,7 +370,7 @@ alzheimers_ml_project/
 | Real-model AI scoring untested on this machine (no Ollama runtime) | Medium | Only failure/validation paths exercised live | Yes until deployed | Test with a real provider (Ollama/Gemini) before release |
 | Partial batch failure (invalid AI output / provider error for some items) | Medium | Those items stay unscored until Retry/manual | Yes (by design) | Per-item errors surfaced in UI; no silent score |
 | AI is an assist signal only — never a diagnosis or clinical certainty | Medium | Misinterpretation risk | No (must keep disclaimers) | Keep confidence phrased as model signal; examiner review required |
-| Q11 vision UI not wired (backend milestone only) | Medium | Camera/upload not available yet; Q11 stays examiner-scored | Yes until UI prompt | Implement UI/UX in a separate later prompt |
+| Q11 vision UI not wired (backend milestone only) | **Fixed** | Camera/upload/preview/reviewer UI implemented | — | `Q11PhotoAssessment.tsx` + `POST /mmse/copying/evaluate` |
 | Blank Q11 submissions were reaching the vision model | Fixed | Blank canvas could be scored as correct | — | Pre-check gate added (`has_drawing_content`), verified blank → 400 before provider |
 
 ---
@@ -429,6 +428,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `6943501` | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
 | 2026-08-13 | `4fdc6fe` | `feat(mmse): add q11 vision evaluation service` | Backend vision endpoint + provider abstraction |
 | 2026-08-13 | `177c62f` | `fix(mmse): reject blank q11 submissions before vision` | Blank/near-blank pre-check gate |
+| 2026-08-13 | `ee64a7c` | `feat(mmse): add q11 photo assessment ui` | Q11 camera/upload → analyze → review UI |
 
 ---
 
@@ -439,7 +439,7 @@ alzheimers_ml_project/
 - ~~Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`).~~ **Done** — `frontend/public/mmse-copying-figure.png`, `COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png'`.
 
 ### Next
-- ~~Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review).~~ **Backend done** (`POST /mmse/copying/evaluate`, provider abstraction, real Ollama test). UI/UX (camera/upload → reviewer) is a separate later prompt. Do NOT fold into the text-AI evaluation.
+- ~~Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review).~~ **Done** — backend (`POST /mmse/copying/evaluate`) + frontend UI (`Q11PhotoAssessment.tsx`) both complete. Do NOT fold into the text-AI evaluation.
 - Live per-patient SHAP explanations (backend endpoint + frontend consumption).
 - MoCA scoring (README V2 roadmap).
 
@@ -450,7 +450,6 @@ alzheimers_ml_project/
 
 ### Explicitly deferred
 - Any change to the ML contract (`/predict`, model, SHAP).
-- Q11 vision UI/UX (camera/upload/preview/reviewer) — separate prompt after the backend milestone is verified.
 - Automated vision scoring of the Reading instruction.
 
 ---
@@ -458,6 +457,12 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Q11 photo-based vision assessment UI (feat(mmse): add q11 photo assessment ui):** Replaced the on-screen drawing canvas for MMSE Question 11 with a photo flow. Frontend-only; the backend `POST /mmse/copying/evaluate` contract is consumed unchanged.
+  - **New `frontend/src/components/mmse/Q11PhotoAssessment.tsx`:** reference figure shown in `sections.tsx` → examiner takes (`capture="environment"`) or uploads a photo (native file input, no camera library) → preview with `[Retake]`/`[Choose Another]`/`[Analyze Drawing]` → explicit "Analyze Drawing" calls `evaluateCopyingImage()` (JSON `{image: dataUrl}`, 90s axios timeout) → normalized result with confidence + `review_required`. States: `empty → photo → analyzing → assessed | error`. Loading shows "Analyzing drawing…" + spinner + "This may take up to a minute on the local vision model." (no fake progress, no technical logs, duplicate-click guarded). Assessed view shows "✓ Correct response"/"✕ Incorrect response" + "AI confidence: X%" + "⚠ Review required" (when `review_required`) with `[Accept AI result]`/`[Override]` (manual 0/1 becomes final). Error mapping: blank → "No drawing detected. Please submit a clear photo of the patient's drawing." (Retake/Choose Another); timeout → "Vision assessment timed out." (Retry/Retake); unavailable → "Vision assessment unavailable." (Retry); invalid → "Vision assessment returned an invalid result." (Retry); upload (bad/oversized/undecodable image) → friendly detail (Retake/Choose Another). Camera permission denied → "Camera access was not granted." with Upload Photo still available; unsupported camera → upload fallback notice. **No raw OS/network/stack traces shown.** Preview is an in-memory data URL (`previewData`) — never written to disk/localStorage/backend/logs.
+  - **State (`frontend/src/mmse/state.ts`):** new `CopyingState { status: empty|photo|analyzing|assessed|error, previewData, previewName, aiScore, reviewRequired, reviewed, manual, errorKind, errorDetail }`; `MMSEState.copying` changed from `ScoreMark` to `CopyingState`. New helpers `copyingEffective()` (manual wins over AI) and `isCopyingFinalized()` (manual set, or AI finalized unless low-confidence-unreviewed); `computeScores().copying`, `isSectionComplete('copying')`, and `sectionResponseCounts().copying` all use them. MMSE total stays integer 0–30; Q1–10, `/mmse/evaluate` batch, and `/predict` untouched.
+  - **API (`frontend/src/api.ts`):** `evaluateCopyingImage()` (90s timeout) + `CopyingEvaluateResponse` type + `classifyCopyingError()` (400-blank vs 400-upload vs 504 vs 502 vs 503 vs client-timeout).
+  - **Deleted `frontend/src/components/mmse/DrawingCanvas.tsx`** (and its barrel export) — no longer used; no mouse/touch drawing anywhere in Q11.
+  - **Verified:** `npm run build` passes. Live backend on `127.0.0.1:8000`: GOOD synthetic copy → HTTP 200 `{correct:false, score:0, confidence:0.6, reason:"Only one figure is present...", review_required:true}`; BLANK → HTTP 400 "No drawing detected..." in 0.0s (provider never invoked); oversized/undecodable → HTTP 400 friendly detail. Error-classification paths (blank/upload/timeout/invalid/unavailable) map to the exact UI strings.
 - **Q11 blank-submission pre-check (fix(mmse): reject blank q11 submissions before vision):** Added a deterministic image-content sanity gate in `backend/src/vision_image.py` (`has_drawing_content`) that runs inside `prepare_patient_image` BEFORE any vision provider call. It measures the fraction of pixels that are meaningfully darker than the estimated paper level (90th percentile of the grayscale histogram). Conservative thresholds: `VISION_BLANK_INK_DELTA` (default 20 gray levels below paper) and `VISION_BLANK_MIN_INK_FRACTION` (default 0.5% of pixels). Blank/near-blank/ultra-low-contrast images → HTTP 400 "No drawing detected. Please submit a clear photo of the patient's drawing." — the provider is NEVER invoked. Faint-but-visible drawings deliberately pass (low threshold avoids over-rejection). Verified empirically: blank 0.0% ink, near-blank (single pixel) <0.5%, tiny 0.52%, good 2.09%, faint-235 ~1.5%, poor 1.02%. Real Ollama test: BLANK → 400 in 0.0s (no `[vision_eval]` log entry — Gemma never called), GOOD → 200 44.8s `{correct:true, score:1, confidence:0.95}`, POOR → 200 35.1s `{correct:false, score:0, confidence:0.6, review_required:true}`. New tests: `TestBlankPreCheck` (7 cases: blank rejected, near-blank rejected, blank never calls provider, simple/faint/good/poor drawings reach provider) — 29/29 backend tests pass. Frontend untouched; `/predict` + `/mmse/evaluate` re-verified HTTP 200; `npm run build` passes.
 - **Q11 vision-assisted figure copying — backend/infrastructure milestone (feat(mmse): add q11 vision evaluation service):** New dedicated endpoint `POST /mmse/copying/evaluate` for MMSE Question 11 ONLY. Frontend UI untouched (no camera/upload/preview/reviewer — those belong to a separate later UI/UX prompt). Details:
   - **Provider abstraction (`backend/src/vision_eval.py`):** built around an OpenAI-compatible multimodal `chat/completions` contract. Exactly ONE provider runs per assessment (`VISION_PROVIDER=ollama|gemini|openai`); no voting, no auto-fallback. Shared layer owns the MMSE copying criterion prompt, normalized schema, strict validation, confidence/review, error normalization, and timeout semantics; provider adapters (`OllamaVisionProvider` via `/v1/chat/completions`, `GeminiVisionProvider`, `OpenAIVisionProvider`) only set base URL/model/auth/payload/response extraction. Config backend-only: `VISION_TIMEOUT` (default 60s — deliberately separate from the text-MMSE 175/180s budgets), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `COPYING_REFERENCE_PATH`.
@@ -488,14 +493,20 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: blank pre-check changes (`backend/src/vision_image.py`, `backend/tests/test_vision_eval.py`) pending commit. Git branch `main`, tracking `origin/main`. Q11 vision milestone `4fdc6fe` + `3c837f5` pushed; perf milestone `6943501`/`db0f02f` pushed. `npm run build` passes; `/predict` and `/mmse/evaluate` verified HTTP 200; Q11 vision endpoint verified live against real Gemma 3 4B (blank → 400 pre-provider; good/poor → 200 with structured results). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest`; Gemma 3 4B supports vision.
+- Working tree: Q11 UI milestone committed (`ee64a7c`). Git branch `main`, tracking `origin/main`. Q11 vision backend `4fdc6fe`/`3c837f5`, blank pre-check `177c62f`/`9b1e6ec`, and Q11 UI `ee64a7c` all pushed. `npm run build` passes; `/predict` and `/mmse/evaluate` verified HTTP 200; Q11 vision endpoint verified live against real Gemma 3 4B (blank → 400 pre-provider; good/poor → 200 with structured results). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest`; Gemma 3 4B supports vision.
 
 ### Next Recommended Task
-- Implement the Q11 UI/UX milestone (camera/upload → preview → submit to `/mmse/copying/evaluate` → examiner review with the normalized result + `review_required`) in a SEPARATE prompt. Backend is ready and contract-documented.
 - Consider whether the local Ollama latency is acceptable for production. The full 30-item batch sits close to the 180s browser timeout on this hardware. Options to revisit deliberately (never by removing items): a larger GPU, a smaller/quantized model, streaming progress, or a split-batch strategy. Any of these needs explicit user instruction.
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
+- `frontend/src/components/mmse/Q11PhotoAssessment.tsx` (NEW: Q11 photo flow — capture/upload/preview/analyze/result/review/errors)
+- `frontend/src/components/mmse/DrawingCanvas.tsx` (DELETED — replaced by the photo flow)
+- `frontend/src/components/mmse/index.ts` (removed `DrawingCanvas` barrel export)
+- `frontend/src/components/mmse/sections.tsx` (`CopyingSection` now renders `Q11PhotoAssessment`; instructions updated)
+- `frontend/src/mmse/state.ts` (`CopyingState`, `CopyingStatus`, `CopyingErrorKind`; `copyingEffective`, `isCopyingFinalized`; `MMSEState.copying` → `CopyingState`)
+- `frontend/src/mmse/batch.ts` (`sectionResponseCounts().copying` uses `isCopyingFinalized`)
+- `frontend/src/api.ts` (`evaluateCopyingImage`, `CopyingEvaluateResponse`, `classifyCopyingError`)
 - `backend/src/vision_image.py` (blank/near-blank pre-check: `has_drawing_content`, `VISION_BLANK_INK_DELTA`, `VISION_BLANK_MIN_INK_FRACTION`, hook into `prepare_patient_image`)
 - `backend/tests/test_vision_eval.py` (`TestBlankPreCheck`: 7 pre-check cases + synthetic blank/near-blank/simple/faint/poor helpers)
 - `backend/src/vision_eval.py` (NEW: Q11 vision provider abstraction + evaluation service)
@@ -537,14 +548,17 @@ alzheimers_ml_project/
 - `6943501` — `perf(mmse): reduce local ai assessment latency`
 - `4fdc6fe` — `feat(mmse): add q11 vision evaluation service`
 - `177c62f` — `fix(mmse): reject blank q11 submissions before vision`
+- `ee64a7c` — `feat(mmse): add q11 photo assessment ui`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `3c837f5`. Blank pre-check fix `177c62f` committed locally (pending push after docs record).
+- Pushed to `origin/main` successfully through `ee64a7c` (Q11 UI milestone).
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
 - Q11 blank/near-blank submissions are rejected deterministically BEFORE any vision provider call (HTTP 400, `has_drawing_content` in `vision_image.py`). This fixes the earlier blank-canvas false-positive. The gate is conservative (0.5% ink / 20 gray-level delta) so faint-but-visible drawings pass — do NOT tighten it without explicit instruction or you will over-reject legitimate faint pencil drawings.
-- Q11 vision backend exists (`POST /mmse/copying/evaluate`) but the frontend does NOT use it yet (UI/UX is a separate later prompt). Q11 currently remains examiner-scored in the UI.
+- Q11 vision backend exists (`POST /mmse/copying/evaluate`) AND the frontend consumes it (`evaluateCopyingImage` + `Q11PhotoAssessment.tsx`). Q11 is now fully AI-assisted with examiner accept/override.
+- Q11 photo preview is an in-memory data URL held in React state (`CopyingState.previewData`) and is never written to disk, localStorage, `public/`, Git, project files, or logs. Do not add image persistence.
+- Camera "Take Photo" uses native `<input capture="environment">` + a `getUserMedia` support probe. Camera permission-denied/unsupported handling is best-effort (browser-dependent); Upload Photo always remains available. Do NOT claim the camera was live-tested unless a real device was used.
 - Q11 reference figure is loaded server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`). Never accept the reference from the client; never duplicate/regenerate it. Note: the file bytes are JPEG despite the `.png` extension — Pillow and browsers content-sniff so it works; do not "fix" the extension.
 - `VISION_PROVIDER` defaults to `ollama`; Gemini/OpenAI require backend `GEMINI_API_KEY`/`OPENAI_API_KEY` and were not live-tested. Provider selection is ONE provider per assessment (no voting/fallback by design).
 - `VISION_TIMEOUT` (60s) is separate from the text-MMSE `OLLAMA_BATCH_TIMEOUT` (175s) and frontend 180s budget — do not merge them.
