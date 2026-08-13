@@ -438,7 +438,8 @@ alzheimers_ml_project/
 | 2026-08-13 | `ee64a7c` | `feat(mmse): add q11 photo assessment ui` | Q11 camera/upload → analyze → review UI |
 | 2026-08-13 | `cb2b7f0` | `feat(ui): collect assessment details before mmse` | Pre-MMSE Assessment Details step |
 | 2026-08-13 | `9345169` | `docs: record assessment details before mmse commit hash` | Assessment Details docs |
-| 2026-08-14 | (next) | `fix(mmse): correct deterministic orientation scoring` | Orientation to Time is deterministic, never AI |
+| 2026-08-14 | `0c97278` | `fix(mmse): correct deterministic orientation scoring` | Orientation to Time is deterministic, never AI |
+| 2026-08-14 | (next) | `docs: record deterministic orientation scoring commit hash` | Deterministic scoring docs |
 
 ---
 
