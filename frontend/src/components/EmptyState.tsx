@@ -4,9 +4,24 @@ import { motion } from 'framer-motion';
 interface EmptyStateProps {
   onAnalyze: () => void;
   loading: boolean;
+  title?: string;
+  description?: React.ReactNode;
+  showAnalyze?: boolean;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({ onAnalyze, loading }) => {
+export const EmptyState: React.FC<EmptyStateProps> = ({
+  onAnalyze,
+  loading,
+  title = 'Results will appear here',
+  description = (
+    <>
+      Fill in the form and click analyze
+      <br />
+      to see predictions
+    </>
+  ),
+  showAnalyze = true,
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
@@ -56,7 +71,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onAnalyze, loading }) =>
             transition={{ delay: 0.2, duration: 0.5 }}
             className="text-xl font-semibold text-white/90 mb-3 tracking-tight"
           >
-            Results will appear here
+            {title}
           </motion.h3>
           
           <motion.p
@@ -65,20 +80,21 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onAnalyze, loading }) =>
             transition={{ delay: 0.3, duration: 0.5 }}
             className="text-sm text-gray-400 mb-10 font-medium leading-relaxed tracking-wide"
           >
-            Fill in the form and click analyze<br />
-            to see predictions
+            {description}
           </motion.p>
           
-          <motion.button
-            type="button"
-            onClick={onAnalyze}
-            disabled={loading}
-            whileHover={loading ? {} : { scale: 1.02, y: -2 }}
-            whileTap={loading ? {} : { scale: 0.98, y: 0 }}
-            className="px-8 py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white text-base font-semibold rounded-xl hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.4)] hover:shadow-[0_6px_24px_rgba(59,130,246,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Processing...' : 'Analyze'}
-          </motion.button>
+          {showAnalyze && (
+            <motion.button
+              type="button"
+              onClick={onAnalyze}
+              disabled={loading}
+              whileHover={loading ? {} : { scale: 1.02, y: -2 }}
+              whileTap={loading ? {} : { scale: 0.98, y: 0 }}
+              className="px-8 py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white text-base font-semibold rounded-xl hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 transition-all duration-200 shadow-[0_4px_16px_rgba(59,130,246,0.4)] hover:shadow-[0_6px_24px_rgba(59,130,246,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Processing...' : 'Analyze'}
+            </motion.button>
+          )}
         </div>
       </div>
     </motion.div>

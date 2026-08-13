@@ -212,6 +212,7 @@ alzheimers_ml_project/
 - **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). Section state lives inside `MMSEAssessment` (local state); `App.tsx` only receives the final total.
 - **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; Next is disabled until the current section is complete; answers persist when navigating back.
+- **Right panel during MMSE phase:** `EmptyState` accepts optional `title`/`description`/`showAnalyze` props; during the MMSE phase `App.tsx` renders a contextual variant ("MMSE Assessment / Complete the assessment to generate your screening result.") with the Analyze button hidden so the panel doesn't look disconnected from the assessment flow.
 - **Reference figure:** The exact figure asset is **not bundled**. `COPYING_REFERENCE_IMAGE` in `config.ts` is empty and a placeholder is shown until the asset is supplied. Do NOT substitute a generic pentagon.
 
 ---
@@ -226,7 +227,7 @@ alzheimers_ml_project/
 - **Buttons:** Blue gradient CTAs with hover lift/scale via Framer Motion; secondary buttons `bg-white/5 border-white/10`.
 - **Animations:** Framer Motion entrance animations (fade + slide + scale), `ease: [0.16, 1, 0.3, 1]`, animated probability bars, spinner.
 - **Responsive:** Two-column desktop layout (form/MMSE left, results right), stacking on mobile; no horizontal scroll; MMSE drawing canvas supports mouse + touch (Pointer Events, `touch-none`).
-- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState`, plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `ExaminerToggle`, `SectionShell`).
+- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `ExaminerToggle`, `SectionShell`).
 
 > **Do not redesign the application unless explicitly requested.**
 
@@ -348,9 +349,10 @@ alzheimers_ml_project/
 
 ### Last Completed Work
 - Implemented the full examiner-assisted 11-section MMSE questionnaire (frontend only) replacing the raw MMSE number input; final score `mmse: totalMMSE` (0–30) flows through the existing `POST /predict` path. Backend/API/model untouched. `npm run build` (tsc + vite) passes.
+- Verification pass: confirmed all 11 sections total 30, every section feeds `totalMMSE` (integer 0–30), state persists across back/forward, registration objects reused in delayed recall, examiner-only scoring, final score assigned to `formData.mmse`, `/predict` payload unchanged (5 fields), backend untouched. Fixed one UX issue: `EmptyState` now supports contextual `title`/`description`/`showAnalyze` props; `App.tsx` renders an MMSE-contextual right panel during the assessment phase (Analyze button hidden).
 
 ### Current State
-- Working tree: MMSE implementation (uncommitted) plus this `AI_CONTEXT.md`. Git branch `main`, tracking `origin/main`.
+- Working tree: MMSE implementation committed and pushed. Git branch `main`, tracking `origin/main`. This verification-pass fix (EmptyState context) is the only pending change.
 
 ### Next Recommended Task
 - Supply the exact MMSE copying figure as an image asset, place it under `frontend/public/`, and set `COPYING_REFERENCE_IMAGE` in `frontend/src/mmse/config.ts`.
@@ -358,9 +360,10 @@ alzheimers_ml_project/
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
-- `frontend/src/App.tsx` (MMSE phase + score integration)
+- `frontend/src/App.tsx` (MMSE phase + score integration; contextual EmptyState during MMSE phase)
 - `frontend/src/components/index.ts` (new exports)
 - `frontend/src/components/mmse/*` (new MMSE UI)
+- `frontend/src/components/EmptyState.tsx` (contextual title/description/showAnalyze props)
 - `frontend/src/mmse/state.ts`, `frontend/src/mmse/config.ts` (new MMSE logic/config)
 
 ### Tests Verified
@@ -372,6 +375,7 @@ alzheimers_ml_project/
 ### Commit
 - `590ff38` — `feat(mmse): add step-by-step MMSE assessment with examiner scoring` (11 files, +1481/−59)
 - `c97ba47` — `docs: add AI_CONTEXT.md for agent context management`
+- `24e662e` — `docs: record MMSE milestone commit hashes in AI_CONTEXT.md`
 
 ### Push Status
 - Pushed to `origin/main` successfully. `main` is up to date with `origin/main`; working tree clean.

@@ -194,6 +194,18 @@ function App() {
               </motion.div>
             ) : result ? (
               <ResultCard result={result} />
+            ) : phase === 'mmse' ? (
+              <EmptyState
+                onAnalyze={handleAnalyze}
+                loading={loading}
+                title="MMSE Assessment"
+                description={
+                  <>
+                    Complete the assessment to generate your screening result.
+                  </>
+                }
+                showAnalyze={false}
+              />
             ) : (
               <EmptyState onAnalyze={handleAnalyze} loading={loading} />
             )}
