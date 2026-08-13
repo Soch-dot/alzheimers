@@ -98,6 +98,36 @@ export interface ReadingState {
   correct: ScoreMark;
 }
 
+export type CopyingErrorKind =
+  | 'blank'
+  | 'timeout'
+  | 'unavailable'
+  | 'invalid'
+  | 'upload';
+
+export type CopyingStatus = 'empty' | 'photo' | 'analyzing' | 'assessed' | 'error';
+
+/**
+ * Question 11 (Copying) state — photo-based flow.
+ *
+ * The patient copies the reference figure on paper; the examiner takes or
+ * uploads a photo. The photo preview (`previewData`, an in-memory data URL)
+ * exists only for the current assessment and is never written to disk,
+ * localStorage, or the backend logs. Analysis runs against the dedicated
+ * `/mmse/copying/evaluate` endpoint (independent of the text-MMSE batch).
+ */
+export interface CopyingState {
+  status: CopyingStatus;
+  previewData: string | null;
+  previewName: string;
+  aiScore: AIScore | null;
+  reviewRequired: boolean;
+  reviewed: boolean;
+  manual: boolean | null;
+  errorKind: CopyingErrorKind | null;
+  errorDetail: string | null;
+}
+
 export interface MMSEState {
   location: AssessmentLocation;
   orientationTime: OrientationTimeState;
@@ -110,7 +140,7 @@ export interface MMSEState {
   command: CommandState;
   reading: ReadingState;
   writing: ItemState;
-  copying: ScoreMark;
+  copying: CopyingState;
 }
 
 export type SectionId =
@@ -178,7 +208,17 @@ export function createInitialMMSEState(): MMSEState {
     command: { tookPaper: null, foldedPaper: null, placedFloor: null },
     reading: { note: '', correct: null },
     writing: blank(),
-    copying: null,
+    copying: {
+      status: 'empty',
+      previewData: null,
+      previewName: '',
+      aiScore: null,
+      reviewRequired: false,
+      reviewed: false,
+      manual: null,
+      errorKind: null,
+      errorDetail: null,
+    },
   };
 }
 
@@ -188,11 +228,24 @@ export function effectiveCorrect(item: ItemState): boolean | null {
   return item.aiScore ? item.aiScore.correct : null;
 }
 
+/** The effective Q11 score: examiner manual verdict wins over AI. */
+export function copyingEffective(copying: CopyingState): boolean | null {
+  if (copying.manual !== null) return copying.manual;
+  return copying.aiScore ? copying.aiScore.correct : null;
+}
+
 /** Whether an item's score is final (counts toward section completion). */
 export function isItemFinalized(item: ItemState): boolean {
   if (item.manual !== null) return true;
   if (!item.aiScore) return false;
   return item.reviewRequired ? item.reviewed : true;
+}
+
+/** Whether the Q11 score is final (counts toward section completion). */
+export function isCopyingFinalized(copying: CopyingState): boolean {
+  if (copying.manual !== null) return true;
+  if (!copying.aiScore) return false;
+  return copying.reviewRequired ? copying.reviewed : true;
 }
 
 function countTrue(marks: ScoreMark[]): number {
@@ -239,7 +292,7 @@ export function computeScores(state: MMSEState): MMSEScores {
     ]),
     reading: state.reading.correct === true ? 1 : 0,
     writing: effectiveCorrect(state.writing) === true ? 1 : 0,
-    copying: state.copying === true ? 1 : 0,
+    copying: copyingEffective(state.copying) === true ? 1 : 0,
   };
 }
 
@@ -289,6 +342,6 @@ export function isSectionComplete(id: SectionId, state: MMSEState): boolean {
     case 'writing':
       return isItemFinalized(state.writing);
     case 'copying':
-      return state.copying !== null;
+      return isCopyingFinalized(state.copying);
   }
 }

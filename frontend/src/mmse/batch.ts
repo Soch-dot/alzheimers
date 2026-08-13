@@ -1,4 +1,5 @@
 import type { ItemState, MMSEState, PlaceKey, SectionId, TimeKey } from './state';
+import { isCopyingFinalized } from './state';
 import {
   AI_CONFIDENCE_REVIEW_THRESHOLD,
   ORIENTATION_TIME_ITEMS,
@@ -174,7 +175,7 @@ export function sectionResponseCounts(
     ).length,
     reading: state.reading.correct !== null ? 1 : 0,
     writing: nonEmpty(state.writing) ? 1 : 0,
-    copying: state.copying !== null ? 1 : 0,
+    copying: isCopyingFinalized(state.copying) ? 1 : 0,
   };
 
   const maxes: Record<SectionId, number> = {

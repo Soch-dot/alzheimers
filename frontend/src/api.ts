@@ -76,6 +76,67 @@ export function isTimeoutError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.code === 'ECONNABORTED';
 }
 
+// ---------------------------------------------------------------------------
+// MMSE Question 11 — photo-based figure copying assessment.
+// Sends the patient drawing as a JSON data URL to the dedicated vision endpoint
+// (independent of the text-MMSE batch). The backend rejects blank drawings with
+// HTTP 400 before any model call; 502/503/504 map to invalid/unavailable/timeout.
+// ---------------------------------------------------------------------------
+export interface CopyingEvaluateResponse {
+  correct: boolean;
+  score: number;
+  confidence: number;
+  reason: string;
+  review_required: boolean;
+}
+
+export const evaluateCopyingImage = async (
+  imageDataUrl: string,
+  timeoutMs = 90000
+): Promise<CopyingEvaluateResponse> => {
+  const response = await axios.post<CopyingEvaluateResponse>(
+    `${API_BASE_URL}/mmse/copying/evaluate`,
+    { image: imageDataUrl },
+    { timeout: timeoutMs }
+  );
+  return response.data;
+};
+
+export type CopyingErrorKind =
+  | 'blank'
+  | 'timeout'
+  | 'unavailable'
+  | 'invalid'
+  | 'upload';
+
+/**
+ * Classify a Q11 vision-evaluation failure into a user-facing error kind.
+ * - 400 with "No drawing detected" detail -> blank drawing
+ * - other 400 -> upload problem (bad/oversized/undecodable image)
+ * - 504 or client timeout -> timeout
+ * - 502 -> invalid model result
+ * - 503 / anything else -> provider unavailable
+ */
+export function classifyCopyingError(err: unknown): {
+  kind: CopyingErrorKind;
+  detail: string | null;
+} {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    const detail = extractApiError(err) || null;
+    if (status === 400) {
+      const isBlank = typeof detail === 'string' && detail.includes('No drawing detected');
+      return { kind: isBlank ? 'blank' : 'upload', detail };
+    }
+    if (status === 504) return { kind: 'timeout', detail };
+    if (status === 502) return { kind: 'invalid', detail };
+    if (status === 503) return { kind: 'unavailable', detail };
+    if (isTimeoutError(err)) return { kind: 'timeout', detail };
+    return { kind: 'unavailable', detail };
+  }
+  return { kind: 'unavailable', detail: null };
+}
+
 export function extractApiError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const detail = err.response?.data?.detail;

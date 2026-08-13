@@ -27,7 +27,7 @@ import {
   inputClass,
   useSpeechRecognition,
 } from './primitives';
-import { DrawingCanvas } from './DrawingCanvas';
+import { Q11PhotoAssessment } from './Q11PhotoAssessment';
 
 export interface SectionProps {
   state: MMSEState;
@@ -706,8 +706,9 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
       instructions={
         <ExaminerInstructions>
           Show the reference figure to the patient and ask them to copy it as
-          exactly as possible. This is an observation-based assessment — judge the
-          copy manually. AI vision assistance will be added in a later milestone.
+          exactly as possible on paper. Take a clear photo of the patient&rsquo;s
+          drawing and analyze it. The AI checks the copy against the reference —
+          the examiner can accept or override the result.
         </ExaminerInstructions>
       }
     >
@@ -730,18 +731,14 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
             </p>
           </div>
         )}
-        <DrawingCanvas />
-        <div className="pt-3 border-t border-white/10">
-          <ExaminerScoring
-            hint="Judge the copy visually; do not auto-score the drawing"
-            value={state.copying}
-            onChange={(value) =>
-              update((draft) => {
-                draft.copying = value;
-              })
-            }
-          />
-        </div>
+        <Q11PhotoAssessment
+          copying={state.copying}
+          updateCopying={(patch) =>
+            update((draft) => {
+              Object.assign(draft.copying, patch);
+            })
+          }
+        />
       </div>
     </SectionShell>
   );
