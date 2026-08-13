@@ -108,9 +108,9 @@ export const READING_INSTRUCTION = 'CLOSE YOUR EYES';
 export const WRITING_PROMPT = 'Make up and write a sentence about anything.';
 
 /**
- * CONFIGURABLE: path to the exact reference figure from the doctor's MMSE
- * questionnaire used for the Copying section. The asset is NOT bundled with
- * this project, so this is left empty until it is supplied. A placeholder is
- * shown in the Copying section until a path is set here.
+ * Path (from `frontend/public/`) to the exact reference figure from the doctor's
+ * MMSE questionnaire used for the Copying section. The asset is served from
+ * `frontend/public/mmse-copying-figure.png` and is the ONLY stimulus shown to
+ * the patient. Do not substitute or redraw it.
  */
-export const COPYING_REFERENCE_IMAGE = '';
+export const COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png';
