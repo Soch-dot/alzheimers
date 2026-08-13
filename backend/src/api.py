@@ -12,6 +12,9 @@ from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
+# AI-assisted MMSE evaluation service (provider-agnostic; does not touch /predict).
+from src.ai_eval import MMSEEvaluateRequest, evaluate_mmse_item
+
 # ------------------------------------
 # Input Schema (5 FIELDS - CDR REMOVED: data leakage)
 # ------------------------------------
@@ -75,6 +78,13 @@ app.add_middleware(
 @app.options("/predict")
 def options_predict() -> Response:
     return Response(status_code=200)
+
+# ------------------------------------
+# AI-assisted MMSE item evaluation (separate service; /predict contract unchanged)
+# ------------------------------------
+@app.post("/mmse/evaluate")
+def mmse_evaluate(req: MMSEEvaluateRequest) -> Dict:
+    return evaluate_mmse_item(req)
 
 @app.get("/")
 def root() -> Dict[str, str]:

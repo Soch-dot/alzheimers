@@ -36,3 +36,42 @@ export const predictAlzheimers = async (data: PatientInput): Promise<PredictionR
   const response = await axios.post<PredictionResponse>(`${API_BASE_URL}/predict`, data);
   return response.data;
 };
+
+// ---------------------------------------------------------------------------
+// AI-assisted MMSE item evaluation (separate service; /predict contract unchanged)
+// ---------------------------------------------------------------------------
+export interface MmseEvaluateRequest {
+  section: string;
+  item_key: string;
+  question: string;
+  response: string;
+  expected: string;
+}
+
+export interface MmseEvaluateResult {
+  correct: boolean;
+  score: number;
+  confidence: number;
+  reason: string;
+}
+
+export const evaluateMmseItem = async (
+  data: MmseEvaluateRequest
+): Promise<MmseEvaluateResult> => {
+  const response = await axios.post<MmseEvaluateResult>(
+    `${API_BASE_URL}/mmse/evaluate`,
+    data
+  );
+  return response.data;
+};
+
+export function extractApiError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ');
+    }
+  }
+  return err instanceof Error ? err.message : 'Unknown error';
+}

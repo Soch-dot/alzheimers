@@ -25,7 +25,8 @@
 - Patient clinical input form (age, sex, education_years, mmse, ses).
 - ML prediction via FastAPI `POST /predict` (Random Forest pipeline).
 - Probability breakdown (pie chart + bars) and confidence/`detection_percentage` display.
-- Examiner-assisted **11-section MMSE questionnaire** (replaces the raw MMSE number input) with automatic 0–30 total that flows into the existing API.
+- **AI-assisted 11-section MMSE questionnaire** (replaces the raw MMSE number input): patient responses are recorded, scored automatically by an AI evaluation service (`POST /mmse/evaluate`, provider-agnostic: Ollama or Gemini), with examiner override/review. Final `mmse` (0–30) flows into the existing `/predict`.
+- Browser speech capture (Web Speech API, no new dependency) with graceful degradation to typing.
 - Training-time static SHAP artifacts (plots + `shap_data.pkl`). **There is no live per-patient SHAP endpoint.**
 
 ### In Progress
@@ -39,9 +40,9 @@
 
 ### Rejected / Out of Scope (do NOT implement unless explicitly reconsidered)
 - Adding CDR (Clinical Dementia Rating) back as a feature — removed because it leaks the diagnosis (see Research Context).
-- Sending individual MMSE answers to the backend or adding 11 new MMSE API fields — the API contract stays 5 fields.
-- Automatic AI/NLP grading of the MMSE writing sentence.
-- Automatic scoring of the copied figure.
+- Sending individual MMSE answers to the backend or adding 11 new MMSE API fields — the API contract stays 5 fields. (Per-item responses DO go to the separate `/mmse/evaluate` AI service, never to `/predict`.)
+- Automatic scoring of the copied figure (Question 11) — planned separately as a vision workflow (photograph → vision model → examiner review).
+- Automated vision scoring of the Reading instruction (Question 9) — currently examiner-observed; vision layer not implemented.
 
 ---
 
@@ -58,7 +59,8 @@
 ### Backend
 - **Framework:** FastAPI 0.121 + Pydantic v2 + Uvicorn.
 - **Entry point:** `backend/src/api.py` (`uvicorn src.api:app`).
-- **Routes:** `GET /` (health message), `POST /predict` (prediction), `OPTIONS /predict` (CORS preflight).
+- **Routes:** `GET /` (health message), `POST /predict` (prediction), `POST /mmse/evaluate` (AI-assisted MMSE item scoring), `OPTIONS /predict` (CORS preflight).
+- **AI service:** `backend/src/ai_eval.py` — provider-agnostic (`AI_PROVIDER=ollama|gemini|none`), structured JSON output validation, per-section prompts. Uses only Python stdlib `urllib` (no new deps). No patient data logged/persisted. Backend-only secrets via env / `.env` (python-dotenv).
 - **Validation:** Pydantic `PatientInput` model. Note: no `min`/`max` range constraints are enforced server-side.
 - **Model loading:** `joblib.load` at import time via `load_model()`; checks `MODEL_PATH` env, then several default paths. If missing, server still starts but `/predict` returns 500.
 
@@ -95,7 +97,8 @@ alzheimers_ml_project/
 ├── README.md                         # Human-facing project doc (contains the API schema and roadmap)
 ├── requirements.txt                  # Root, unpinned, incomplete; prefer backend/requirements.txt
 ├── backend/
-│   ├── src/api.py                    # FastAPI prediction API. DO NOT modify for frontend-only features.
+│   ├── src/api.py                    # FastAPI prediction API + /mmse/evaluate. /predict contract frozen.
+│   ├── src/ai_eval.py                # AI-assisted MMSE evaluation service (provider-agnostic)
 │   ├── src/train_clean_clinical_model.py  # Trains model + generates SHAP. Hardcoded absolute data path.
 │   ├── src/test_hello.py             # shap/matplotlib import smoke test
 │   ├── models/best_model.pkl         # Trained pipeline (joblib). Do not modify.
@@ -133,7 +136,8 @@ alzheimers_ml_project/
 | `frontend/src/mmse/*` | MMSE logic/config/state | Allowed; keep total 0–30 and 11-section structure |
 | `frontend/src/components/mmse/*` | MMSE UI | Allowed; preserve design system |
 | `frontend/src/components/index.ts` | Barrel exports | Allowed (add exports) |
-| `backend/src/api.py` | Prediction API | **Do not modify for frontend-only features** |
+| `backend/src/api.py` | Prediction API | `/predict` contract frozen; adding new endpoints (e.g. `/mmse/evaluate`) is allowed |
+| `backend/src/ai_eval.py` | AI-assisted MMSE evaluation service | Allowed (new) |
 | `backend/src/train_clean_clinical_model.py` | Training + SHAP | **Do not modify without explicit instruction** |
 | `backend/models/*` | Model + SHAP artifacts | **Do not modify / retrain without explicit instruction** |
 
@@ -176,6 +180,23 @@ alzheimers_ml_project/
   - The DataFrame is built by column **key**, so request field order does not matter.
 - **Frontend caller:** `predictAlzheimers()` in `frontend/src/api.ts`.
 
+### `POST /mmse/evaluate` (AI-assisted MMSE item scoring — separate service)
+- **Purpose:** Scores one MMSE item's patient response via an AI provider. Never sends item answers to `/predict`; only the final `mmse` total does.
+- **Request body:**
+  ```json
+  { "section": "naming", "item_key": "wristwatch", "question": "What is this?", "response": "watch", "expected": "wristwatch" }
+  ```
+  - `section` is one of: `orientation_time, orientation_place, registration, attention_serial7, attention_spell_world, delayed_recall, naming, repetition, writing`.
+  - `expected` is the hidden evaluation context (examiner-only). For `orientation_time` the backend derives today's date-based expected answer server-side and ignores the client value.
+- **Response (validated structured output):**
+  ```json
+  { "correct": true, "score": 1, "confidence": 0.98, "reason": "..." }
+  ```
+  - `correct` bool; `score` must equal 1/0 per correct; `confidence` in [0,1]; `reason` non-empty. Validation failure → `422` (no score auto-assigned). Provider/network/config failure → `503`.
+- **Provider config (backend env only):** `AI_PROVIDER=ollama|gemini|none`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (default `gemma3`), `GEMINI_BASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_TIMEOUT`.
+- **Frontend caller:** `evaluateMmseItem()` in `frontend/src/api.ts`.
+- **Disclaimers:** AI result is an assist signal, never a diagnosis. Confidence is a model signal, not clinical certainty. `AI_PROVIDER=none` or an unreachable provider surfaces "AI assessment unavailable" with Retry/Manual-review in the UI.
+
 ---
 
 ## 6. ML Contract (CRITICAL — DO NOT CHANGE)
@@ -194,23 +215,24 @@ alzheimers_ml_project/
 
 ## 7. MMSE Implementation
 
-- **Why it exists:** Replaces the single raw "MMSE Score" number input with a proper examiner-assisted questionnaire, while keeping the API contract unchanged (only the computed total is sent as `mmse`).
+- **Why it exists:** Replaces the single raw "MMSE Score" number input with an AI-assisted examiner-supervised questionnaire, while keeping the API contract unchanged (only the computed total is sent as `mmse`).
+- **Workflow:** Question → patient responds → response captured (typed or speech) → AI evaluates (`POST /mmse/evaluate`) → score recorded automatically → MMSE total updates. The examiner supervises; manual scoring is an override/exception, not the default.
 - **Structure:** 11 sections, max total **30**:
-  1. Orientation to Time (5) — year/season/date/day/month, 1 pt each.
-  2. Orientation to Place (5) — state/county/town/building/floor; correct answers depend on location, configured in `config.ts` (`PLACE_ITEMS`).
-  3. Registration (3) — examiner presents 3 objects (`REGISTRATION_OBJECTS`, configurable); 1 pt per correctly repeated object.
-  4. Attention & Calculation (5) — examiner selects Serial-7s or spell WORLD backwards; expected answers shown examiner-only.
-  5. Delayed Recall (3) — recalls the same Registration objects.
-  6. Naming (2) — wristwatch, pencil.
-  7. Repetition (1) — "No ifs, ands, or buts."
-  8. Three-Step Command (3) — right hand / fold / floor, each scored independently.
-  9. Reading (1) — "CLOSE YOUR EYES"; must not be read aloud.
-  10. Writing (1) — sentence with a noun and a verb; examiner marks, **no AI grading**.
-  11. Copying (1) — reference figure + drawing canvas + examiner scoring. **No automated figure scoring.**
-- **Scoring:** `computeTotal()` in `frontend/src/mmse/state.ts`; always an integer 0–30.
-- **Examiner-assisted workflow:** The UI is for the examiner, not the patient. Instructions are shown in "Examiner instructions — for the examiner, not the patient" boxes.
-- **Response recording:** Every question requiring a patient response records the patient's actual response (a `PatientResponse` input) and keeps it **separate** from the examiner's independent score (`ExaminerScoring`, Correct/Incorrect). Flow: question → patient responds → examiner records response → examiner scores → score computed. Patient responses are **never** auto-scored (no hardcoded matching, no AI/NLP). The three-step command has no text entry — it uses examiner observations with "Done correctly"/"Incorrect". Reading has an optional examiner note.
-- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). Each scored item uses `ItemState { response: string; correct: boolean | null }` so the response text and the examiner mark are stored separately. `orientationTime` uses `items: Record<TimeKey, ItemState>`; `attention.spellWorld` is `{ response: string; letters: [ItemState; 5] }`. Section state lives inside `MMSEAssessment` (local state); `App.tsx` only receives the final total.
+  1. Orientation to Time (5) — year/season/date/day/month; AI-scored against server-derived date values.
+  2. Orientation to Place (5) — state/county/town/building/floor; AI-scored against per-location `PLACE_ITEMS` expected answers; **unconfigured items are manual-only** ("score manually").
+  3. Registration (3) — 3 objects (`REGISTRATION_OBJECTS`, configurable); AI-scored; objects reused for Delayed Recall.
+  4. Attention & Calculation (5) — Serial-7s (5 fields) or spell WORLD backwards (full response split into per-letter scores); AI-scored; expected sequence examiner-only.
+  5. Delayed Recall (3) — recalls the same Registration objects; AI-scored.
+  6. Naming (2) — wristwatch, pencil; AI-scored (accepts synonyms like wristwatch/watch).
+  7. Repetition (1) — "No ifs, ands, or buts."; AI-scored (allows case/punctuation differences; low confidence → review).
+  8. Three-Step Command (3) — right hand / fold / floor; **manual examiner observations** (physical task, no AI).
+  9. Reading (1) — "CLOSE YOUR EYES"; **manual examiner observation** + optional note. Automated vision scoring NOT implemented (documented limitation).
+  10. Writing (1) — sentence with noun and verb; **AI-scored on that criterion only** (never spelling/grammar/handwriting/intelligence).
+  11. Copying (1) — reference figure + drawing canvas + **manual examiner scoring**. Vision workflow planned separately; **not implemented in the AI-scoring task**.
+- **AI confidence:** model/service signal only, never clinical certainty. Confidence < `AI_CONFIDENCE_REVIEW_THRESHOLD` (0.7, config.ts) → item flagged "⚠ Review required"; it does not count as complete until the examiner accepts the AI result or overrides.
+- **Failure handling:** AI error → "AI assessment unavailable." with Retry + Manual review. No silent auto-score on failure. Invalid AI JSON → backend 422, no score assigned.
+- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed).
+- **Speech capture:** `useSpeechRecognition()` in `primitives.tsx` uses the native Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`), no new dependency. Unsupported browsers degrade to typing with a notice.
 - **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; Next is disabled until the current section is complete; answers persist when navigating back.
 - **Right panel during MMSE phase:** `EmptyState` accepts optional `title`/`description`/`showAnalyze` props; during the MMSE phase `App.tsx` renders a contextual variant ("MMSE Assessment / Complete the assessment to generate your screening result.") with the Analyze button hidden so the panel doesn't look disconnected from the assessment flow.
@@ -228,7 +250,7 @@ alzheimers_ml_project/
 - **Buttons:** Blue gradient CTAs with hover lift/scale via Framer Motion; secondary buttons `bg-white/5 border-white/10`.
 - **Animations:** Framer Motion entrance animations (fade + slide + scale), `ease: [0.16, 1, 0.3, 1]`, animated probability bars, spinner.
 - **Responsive:** Two-column desktop layout (form/MMSE left, results right), stacking on mobile; no horizontal scroll; MMSE drawing canvas supports mouse + touch (Pointer Events, `touch-none`).
-- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `PatientResponse`, `ExaminerScoring`, `ScoredResponse`, `SectionShell`, `inputClass`).
+- **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `PatientResponse`, `ExaminerScoring`, `AIAssessmentPanel`, `AIScoredResponse`, `useSpeechRecognition`, `SectionShell`, `inputClass`).
 
 > **Do not redesign the application unless explicitly requested.**
 
@@ -241,12 +263,16 @@ alzheimers_ml_project/
 - [x] Probability breakdown (pie chart + bars)
 - [x] Confidence / `detection_percentage` display
 - [x] Detection status (Alzheimer's detected / not)
-- [x] MMSE questionnaire (11 sections, examiner-assisted, 0–30)
+- [x] MMSE questionnaire (11 sections, AI-assisted scoring, 0–30)
+- [x] AI-assisted per-item evaluation (`POST /mmse/evaluate`, provider-agnostic: Ollama/Gemini)
+- [x] Browser speech capture (Web Speech API) with typing fallback
+- [x] Examiner review/override of AI scores (incl. low-confidence review flow)
 - [x] MMSE score → existing prediction flow (single `mmse` field)
 - [x] Drawing canvas for copying task (mouse + touch)
 - [x] Training-time static SHAP artifacts (plots + pickle)
 - [ ] Live per-patient SHAP explanations
-- [ ] Vision-assisted figure evaluation
+- [ ] Vision-assisted figure evaluation (Question 11)
+- [ ] Vision-assisted reading evaluation (Question 9)
 - [ ] MoCA scoring
 
 ---
@@ -276,6 +302,9 @@ alzheimers_ml_project/
 | Hardcoded legacy `rule_applied` / `rule_usage_percentage` fields | Low | Misleading API surface | Yes | Remove on next API refactor |
 | README claims `Dataset.csv` isn't committed, but it is | Low | Doc mismatch | Yes | Fix README |
 | Converted-class recall weak (class imbalance) | Medium | Screening may miss conversions | Yes (research limitation) | Larger dataset / resampling (future) |
+| AI provider not configured (`AI_PROVIDER=none`) or Ollama not running | Medium | AI-scored items degrade to manual review | Yes (by design) | Configure provider env; manual fallback is built in |
+| Real-model AI scoring untested on this machine (no Ollama runtime) | Medium | Only failure/validation paths exercised live | Yes until deployed | Test with a real provider (Ollama/Gemini) before release |
+| AI is an assist signal only — never a diagnosis or clinical certainty | Medium | Misinterpretation risk | No (must keep disclaimers) | Keep confidence phrased as model signal; examiner review required |
 
 ---
 
@@ -322,68 +351,82 @@ alzheimers_ml_project/
 | 2026-07-11 | `f4fab7b` | SHAP multiclass fix + per-class plots | Correct SHAP artifacts |
 | 2026-08-13 | `590ff38` | `feat(mmse): add step-by-step MMSE assessment with examiner scoring` | MMSE questionnaire implementation |
 | 2026-08-13 | `c97ba47` | `docs: add AI_CONTEXT.md for agent context management` | AI_CONTEXT.md milestone |
+| 2026-08-13 | `ccc45d3` | `fix(mmse): show contextual right panel during MMSE assessment phase` | EmptyState UX fix |
+| 2026-08-13 | `73ef09c` | `feat(mmse): record patient responses separately from examiner scoring` | Response-recording UX |
 
 ---
 
 ## 15. Current Roadmap
 
 ### Immediate
-- MMSE questionnaire is implemented and building. Remaining: supply the copying-figure asset and set `COPYING_REFERENCE_IMAGE`; optionally configure `PLACE_ITEMS` answers per location.
+- Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`); optionally configure `PLACE_ITEMS` answers per location.
+- Configure a real AI provider (Ollama local, or Gemini with a backend `GEMINI_API_KEY`) and validate live AI-scored responses before release. `AI_PROVIDER`/model/base URLs live in backend env (never in React).
 
 ### Next
+- Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review). Do NOT fold into the current AI-text evaluation.
 - Live per-patient SHAP explanations (backend endpoint + frontend consumption).
 - MoCA scoring (README V2 roadmap).
 
 ### Later
-- Vision-assisted evaluation of the copied figure (document separately when implemented).
+- Vision-assisted reading evaluation (Question 9).
 - MRI/imaging, multimodal input (README V3/V4 roadmap).
 - Larger/balanced dataset to improve Converted-class recall.
 
 ### Explicitly deferred
-- AI/NLP grading of the writing sentence.
-- Automated figure scoring.
-- Any change to the ML contract.
+- Any change to the ML contract (`/predict`, model, SHAP).
+- Automated figure scoring — pending the separate vision workflow.
+- Automated vision scoring of the Reading instruction.
 
 ---
 
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
-- Implemented the full examiner-assisted 11-section MMSE questionnaire (frontend only) replacing the raw MMSE number input; final score `mmse: totalMMSE` (0–30) flows through the existing `POST /predict` path. Backend/API/model untouched. `npm run build` (tsc + vite) passes.
-- Verification pass: confirmed all 11 sections total 30, every section feeds `totalMMSE` (integer 0–30), state persists across back/forward, registration objects reused in delayed recall, examiner-only scoring, final score assigned to `formData.mmse`, `/predict` payload unchanged (5 fields), backend untouched. Fixed one UX issue: `EmptyState` now supports contextual `title`/`description`/`showAnalyze` props; `App.tsx` renders an MMSE-contextual right panel during the assessment phase (Analyze button hidden).
-- **Response-recording UX upgrade:** every MMSE question now records the patient's actual response (`PatientResponse` input) separately from the examiner's Correct/Incorrect mark (`ExaminerScoring`). State uses `ItemState { response, correct }` so response text and score are never mixed; responses are never auto-scored. Spell-WORLD records a single full response + per-letter scores. Three-step command keeps examiner observations ("Done correctly"/"Incorrect"); Reading gains an optional examiner note. Scoring still integer 0–30; payload and backend untouched.
+- **AI-assisted MMSE scoring:** Replaced examiner-manual scoring with a provider-agnostic AI evaluation flow (Patient response → `POST /mmse/evaluate` → validated structured score → 0–30 total). New `backend/src/ai_eval.py` service (Ollama `/api/chat` or Gemini `/chat/completions` via stdlib `urllib`, env config `AI_PROVIDER`/`OLLAMA_*`/`GEMINI_*`/`AI_TIMEOUT`, per-section prompts, strict `parse_ai_result` validation → 422 on invalid output, 503 on provider failure). `api.py` gained only `POST /mmse/evaluate`; `/predict` contract, model, and SHAP untouched. Frontend: `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }`, `effectiveCorrect()` (manual overrides AI), `isItemFinalized()` (low-confidence items need examiner Accept/Override), `AIAssessmentPanel` (assessing/assessed/error states), `AIScoredResponse`, `useSpeechRecognition` (Web Speech API, typing fallback), sections 1–7 + 10 AI-scored; sections 8 (three-step command) and 9 (reading) examiner-observed; section 11 (copying) manual — vision deferred. Confidence is a model signal; threshold `AI_CONFIDENCE_REVIEW_THRESHOLD = 0.7`. `npm run build` (tsc + vite) passes.
+- Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel (EmptyState props); `73ef09c` patient-response recording separated from scoring.
 
 ### Current State
-- Working tree: MMSE implementation committed and pushed. Git branch `main`, tracking `origin/main`. This response-recording upgrade is the only pending change.
+- Working tree: AI-assisted scoring work is **uncommitted** (see Files Recently Changed). Git branch `main`, tracking `origin/main`. Backend AI service implemented and validation-tested (mocks + live `/mmse/evaluate` with a mock Gemini provider → 200). Real Ollama/Gemini model output not yet exercised on this machine (no Ollama runtime).
 
 ### Next Recommended Task
-- Supply the exact MMSE copying figure as an image asset, place it under `frontend/public/`, and set `COPYING_REFERENCE_IMAGE` in `frontend/src/mmse/config.ts`.
+- Configure a real AI provider and smoke-test live AI responses (correct/incorrect paths) before release.
+- Supply the exact MMSE copying figure asset and set `COPYING_REFERENCE_IMAGE`.
 - Optionally set per-location expected answers in `PLACE_ITEMS` (`frontend/src/mmse/config.ts`).
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
-- `frontend/src/components/mmse/primitives.tsx` (`PatientResponse`, `ExaminerScoring`, `ScoredResponse`, `inputClass`)
-- `frontend/src/components/mmse/sections.tsx` (all sections use response + scoring flow)
-- `frontend/src/mmse/state.ts` (`ItemState` model, `orientationTime.items`, `attention.spellWorld` shape)
-- `frontend/src/mmse/config.ts` (`ORIENTATION_TIME_ITEMS` key type)
+- `backend/src/ai_eval.py` (new — AI evaluation service, provider-agnostic)
+- `backend/src/api.py` (added `POST /mmse/evaluate` only; `/predict` untouched)
+- `frontend/src/api.ts` (`evaluateMmseItem`, `MmseEvaluateRequest/Result`, `extractApiError`)
+- `frontend/src/mmse/state.ts` (`ItemState`/`AIScore` model, `effectiveCorrect`, `isItemFinalized`)
+- `frontend/src/mmse/config.ts` (`AI_CONFIDENCE_REVIEW_THRESHOLD`)
+- `frontend/src/components/mmse/primitives.tsx` (`AIAssessmentPanel`, `AIScoredResponse`, `useSpeechRecognition`, `PatientResponse` with rightSlot)
+- `frontend/src/components/mmse/sections.tsx` (AI-scored flow per section; manual command/reading/copying)
 - Earlier: `frontend/src/App.tsx`, `frontend/src/components/index.ts`, `frontend/src/components/EmptyState.tsx`
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
 - Dev server boots cleanly (`vite`), serves HTTP 200.
-- No backend tests exist; backend left untouched.
+- Backend: 13 validation/failure checks pass (valid/incorrect, fenced JSON, invalid JSON, score mismatch, confidence range, correct-type, orientation_time server-side expected, `AI_PROVIDER=none`→503, unreachable→503, unsupported section→422, mock valid→200 dict, mock invalid JSON→422). Live: `/predict` 200 (unchanged contract); `/mmse/evaluate` via mock Gemini provider → 200 `{correct, score, confidence, reason}`.
+- Frontend state logic verified by Node harness: totals 0/3/4/30, maxes per section sum 30, spell-World path 30, override wins, low-confidence gating (not finalized until reviewed), empty/incomplete sections gated. Real provider AI correctness untested (no Ollama runtime).
 
 ### Commit
-- `590ff38` — `feat(mmse): add step-by-step MMSE assessment with examiner scoring` (11 files, +1481/−59)
+- `590ff38` — `feat(mmse): add step-by-step MMSE assessment with examiner scoring`
 - `c97ba47` — `docs: add AI_CONTEXT.md for agent context management`
 - `24e662e` — `docs: record MMSE milestone commit hashes in AI_CONTEXT.md`
+- `ccc45d3` — `fix(mmse): show contextual right panel during MMSE assessment phase`
+- `73ef09c` — `feat(mmse): record patient responses separately from examiner scoring`
+- Pending: `feat(mmse): add ai-assisted response scoring` (current uncommitted work)
 
 ### Push Status
-- Pushed to `origin/main` successfully. `main` is up to date with `origin/main`; working tree clean.
+- Pushed to `origin/main` successfully through `73ef09c`. Current AI-assisted work is uncommitted (see above); push after committing.
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
 - Copying-figure asset is missing; do not substitute a generic pentagon.
 - `probabilities` in `/predict` are position-indexed (`[0,1,2]`), not keyed by `model.classes_`.
-- Do not retrain the model or modify `backend/src/api.py` without explicit instruction.
+- Do not retrain the model or modify the `/predict` contract without explicit instruction.
+- AI results are an assist signal, never a diagnosis; confidence is a model signal, not clinical certainty. Keep these disclaimers in the UI.
+- AI secrets (`GEMINI_API_KEY`, etc.) must stay backend-only (env/`.env`); never ship them in React or commit them.
+- Real AI-model correctness is untested on this machine (no Ollama runtime) — only failure/validation paths were exercised.
 - `README.md` has stale claims (e.g., Dataset.csv "not committed") — treat code as authoritative.

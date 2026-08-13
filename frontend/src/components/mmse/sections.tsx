@@ -1,7 +1,8 @@
-import React from 'react';
-import type { MMSEState } from '../../mmse/state';
+import React, { useRef } from 'react';
+import type { ItemState, MMSEState } from '../../mmse/state';
 import { computeScores } from '../../mmse/state';
 import {
+  AI_CONFIDENCE_REVIEW_THRESHOLD,
   ATTENTION_TASKS,
   COPYING_REFERENCE_IMAGE,
   NAMING_ITEMS,
@@ -15,13 +16,16 @@ import {
   THREE_STEP_COMMAND_TEXT,
   WRITING_PROMPT,
 } from '../../mmse/config';
+import { evaluateMmseItem, extractApiError } from '../../api';
 import {
+  AIAssessmentPanel,
+  AIScoredResponse,
   ExaminerInstructions,
   ExaminerScoring,
   PatientResponse,
-  ScoredResponse,
   SectionShell,
   inputClass,
+  useSpeechRecognition,
 } from './primitives';
 import { DrawingCanvas } from './DrawingCanvas';
 
@@ -39,26 +43,23 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update }
       instructions={
         <ExaminerInstructions>
           Ask the patient the five questions below one at a time. Record the
-          patient&apos;s actual response, then give 1 point for each correct
-          answer.
+          patient&apos;s actual response — the AI service scores it automatically.
+          Review the result and use Override only when needed. This is
+          AI-assisted cognitive assessment, not a diagnosis.
         </ExaminerInstructions>
       }
     >
       {ORIENTATION_TIME_ITEMS.map((item) => (
-        <ScoredResponse
+        <AIScoredResponse
           key={item.key}
-          prompt={item.prompt}
-          response={state.orientationTime.items[item.key].response}
-          onResponseChange={(value) =>
+          section="orientation_time"
+          itemKey={item.key}
+          question={item.prompt}
+          expected=""
+          item={state.orientationTime.items[item.key]}
+          update={(patch) =>
             update((draft) => {
-              draft.orientationTime.items[item.key].response = value;
-            })
-          }
-          responsePlaceholder="Patient's response"
-          score={state.orientationTime.items[item.key].correct}
-          onScoreChange={(value) =>
-            update((draft) => {
-              draft.orientationTime.items[item.key].correct = value;
+              Object.assign(draft.orientationTime.items[item.key], patch);
             })
           }
         />
@@ -76,34 +77,32 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update 
       instructions={
         <ExaminerInstructions>
           Ask the patient the five questions below. Correct answers depend on the
-          assessment location. Record the patient&apos;s actual response, then
-          mark each item correct or incorrect. Do not show the expected answer to
-          the patient.
+          assessment location (set in{' '}
+          <code className="text-gray-400">src/mmse/config.ts</code>). The AI scores
+          each response; items without a configured expected answer are scored
+          manually. Expected answers stay hidden from the patient.
         </ExaminerInstructions>
       }
     >
       {PLACE_ITEMS.map((item) => {
         const placeItem = state.orientationPlace.items[item.key];
         return (
-          <ScoredResponse
+          <AIScoredResponse
             key={item.key}
-            prompt={item.prompt}
+            section="orientation_place"
+            itemKey={item.key}
+            question={item.prompt}
             hint={
               item.expected
                 ? `Expected answer: ${item.expected}`
-                : 'Expected answer: set per location in src/mmse/config.ts'
+                : 'Expected answer not configured for this location'
             }
-            response={placeItem.response}
-            onResponseChange={(value) =>
+            expected={item.expected}
+            aiEnabled={Boolean(item.expected)}
+            item={placeItem}
+            update={(patch) =>
               update((draft) => {
-                draft.orientationPlace.items[item.key].response = value;
-              })
-            }
-            responsePlaceholder="Patient's response"
-            score={placeItem.correct}
-            onScoreChange={(value) =>
-              update((draft) => {
-                draft.orientationPlace.items[item.key].correct = value;
+                Object.assign(draft.orientationPlace.items[item.key], patch);
               })
             }
           />
@@ -123,9 +122,8 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update }) =
         <ExaminerInstructions>
           Say: &ldquo;I am going to name three objects. After I say them, I want you
           to repeat them back to me.&rdquo; Name the three objects one second apart.
-          Record the patient&apos;s repetition of each object, then give 1 point
-          for each object repeated correctly. The same objects are used again in
-          the Delayed Recall section.
+          Record the patient&apos;s repetition of each object — the AI scores it
+          automatically. The same objects are used again in Delayed Recall.
           <ul className="mt-3 space-y-1">
             {REGISTRATION_OBJECTS.map((obj, index) => (
               <li key={obj} className="font-medium text-white">
@@ -137,25 +135,172 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update }) =
       }
     >
       {REGISTRATION_OBJECTS.map((obj, index) => (
-        <ScoredResponse
+        <AIScoredResponse
           key={obj}
-          prompt={`Object ${index + 1}`}
-          response={state.registration.items[index].response}
-          onResponseChange={(value) =>
+          section="registration"
+          itemKey={String(index + 1)}
+          question={`Object ${index + 1}`}
+          expected={obj}
+          item={state.registration.items[index]}
+          update={(patch) =>
             update((draft) => {
-              draft.registration.items[index].response = value;
-            })
-          }
-          responsePlaceholder="Patient's response"
-          score={state.registration.items[index].correct}
-          onScoreChange={(value) =>
-            update((draft) => {
-              draft.registration.items[index].correct = value;
+              Object.assign(draft.registration.items[index], patch);
             })
           }
         />
       ))}
     </SectionShell>
+  );
+};
+
+const SpellWorldBlock: React.FC<SectionProps> = ({ state, update }) => {
+  const busyRef = useRef(false);
+  const fullResponse = state.attention.spellWorld.response;
+
+  const patchLetter = (index: number, patch: Partial<ItemState>) =>
+    update((draft) => {
+      Object.assign(draft.attention.spellWorld.letters[index], patch);
+    });
+
+  const updateFullResponse = (value: string) => {
+    if (value === fullResponse) return;
+    update((draft) => {
+      draft.attention.spellWorld.response = value;
+      for (const letter of draft.attention.spellWorld.letters) {
+        letter.response = '';
+        letter.status = 'idle';
+        letter.aiScore = null;
+        letter.reviewRequired = false;
+        letter.reviewed = false;
+        letter.manual = null;
+        letter.error = null;
+      }
+    });
+  };
+
+  const runLetterEvaluation = async (index: number, text: string) => {
+    patchLetter(index, { status: 'assessing', error: null });
+    try {
+      const result = await evaluateMmseItem({
+        section: 'attention_spell_world',
+        item_key: String(index + 1),
+        question: `Letter ${index + 1} of WORLD backwards`,
+        response: text,
+        expected: SPELL_WORLD_EXPECTED[index],
+      });
+      patchLetter(index, {
+        status: 'assessed',
+        aiScore: {
+          correct: result.correct,
+          confidence: result.confidence,
+          reason: result.reason,
+        },
+        reviewRequired: result.confidence < AI_CONFIDENCE_REVIEW_THRESHOLD,
+        reviewed: false,
+        error: null,
+      });
+    } catch (err) {
+      patchLetter(index, { status: 'error', error: extractApiError(err) });
+    }
+  };
+
+  const evaluateFullResponse = async (text: string) => {
+    if (busyRef.current) return;
+    const chars = text
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .split('')
+      .slice(0, 5);
+    update((draft) => {
+      for (let i = 0; i < 5; i += 1) {
+        draft.attention.spellWorld.letters[i].response = chars[i] ?? '';
+      }
+    });
+    busyRef.current = true;
+    for (let i = 0; i < 5; i += 1) {
+      await runLetterEvaluation(i, chars[i] ?? '');
+    }
+    busyRef.current = false;
+  };
+
+  const speechHook = useSpeechRecognition((transcript) => {
+    updateFullResponse(transcript);
+    window.setTimeout(() => {
+      void evaluateFullResponse(transcript);
+    }, 0);
+  });
+  const { supported: speechSupported, listening, error: speechError, start, stop } = speechHook;
+
+  const micButton = (
+    <button
+      type="button"
+      onClick={() => (listening ? stop() : start())}
+      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 ${
+        listening
+          ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
+          : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+      }`}
+    >
+      {listening ? 'Stop' : 'Mic'}
+    </button>
+  );
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
+      <div>
+        <p className="text-sm font-medium text-white">Spell the word WORLD backwards</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Record the full response; each letter is scored in its position.
+        </p>
+      </div>
+      <div>
+        <PatientResponse
+          value={fullResponse}
+          onChange={updateFullResponse}
+          placeholder="Patient's full response"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              if (fullResponse.trim() && !busyRef.current) {
+                void evaluateFullResponse(fullResponse);
+              }
+            }
+          }}
+          rightSlot={speechSupported ? micButton : undefined}
+        />
+        {!speechSupported && (
+          <p className="text-[11px] text-gray-500 mt-1.5">
+            Speech input not supported in this browser — type the response instead.
+          </p>
+        )}
+        {listening && (
+          <p className="text-[11px] text-blue-300/80 mt-1.5">Listening… ask the patient to speak now.</p>
+        )}
+        {speechError && <p className="text-[11px] text-rose-300/80 mt-1.5">{speechError}</p>}
+      </div>
+      <div className="pt-4 border-t border-white/10 space-y-3">
+        {SPELL_WORLD_EXPECTED.map((letter, index) => (
+          <div key={index} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
+            <div className="mb-2">
+              <p className="text-sm font-medium text-white">Letter {index + 1}</p>
+              <p className="text-xs text-gray-500">Expected: {letter}</p>
+            </div>
+            <AIAssessmentPanel
+              item={state.attention.spellWorld.letters[index]}
+              update={(patch) => patchLetter(index, patch)}
+              onAssess={() =>
+                void runLetterEvaluation(
+                  index,
+                  state.attention.spellWorld.letters[index].response
+                )
+              }
+              idleEmptyHint="No letter provided for this position."
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 
@@ -170,8 +315,8 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
       instructions={
         <ExaminerInstructions>
           Administer one of the two tasks below. Record the patient&apos;s
-          responses, then give 1 point for each correct response. Do not show the
-          expected answers to the patient.
+          responses — the AI scores each step/letter automatically. Expected
+          answers stay hidden from the patient.
           {isSerial7 ? (
             <p className="mt-2 text-gray-400">
               Say: &ldquo;Now I would like you to subtract 7 from 100 and keep
@@ -181,8 +326,8 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
           ) : (
             <p className="mt-2 text-gray-400">
               Say: &ldquo;Spell the word WORLD backwards.&rdquo; Record the full
-              response, then score each letter in the correct position. Expected
-              letters: {SPELL_WORLD_EXPECTED.join(', ')}.
+              response; each letter is scored in its position. Expected letters:{' '}
+              {SPELL_WORLD_EXPECTED.join(', ')}.
             </p>
           )}
         </ExaminerInstructions>
@@ -211,69 +356,27 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update }) => {
       <div className="pt-1">
         {isSerial7 ? (
           state.attention.serial7.map((item, index) => (
-            <ScoredResponse
+            <AIScoredResponse
               key={`serial7-${index}`}
-              prompt={`Response ${index + 1}`}
+              section="attention_serial7"
+              itemKey={String(index + 1)}
+              question={`Response ${index + 1}`}
               hint={
                 SERIAL_7_EXPECTED[index]
                   ? `Expected: ${SERIAL_7_EXPECTED[index]}`
                   : undefined
               }
-              response={item.response}
-              onResponseChange={(value) =>
+              expected={SERIAL_7_EXPECTED[index] ?? ''}
+              item={item}
+              update={(patch) =>
                 update((draft) => {
-                  draft.attention.serial7[index].response = value;
-                })
-              }
-              responsePlaceholder="Patient's response"
-              score={item.correct}
-              onScoreChange={(value) =>
-                update((draft) => {
-                  draft.attention.serial7[index].correct = value;
+                  Object.assign(draft.attention.serial7[index], patch);
                 })
               }
             />
           ))
         ) : (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
-            <div>
-              <p className="text-sm font-medium text-white">
-                Spell the word WORLD backwards
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Score each letter only if it is in the correct position.
-              </p>
-            </div>
-            <PatientResponse
-              value={state.attention.spellWorld.response}
-              onChange={(value) =>
-                update((draft) => {
-                  draft.attention.spellWorld.response = value;
-                })
-              }
-              placeholder="Patient's full response"
-            />
-            <div className="pt-4 border-t border-white/10 space-y-3">
-              {state.attention.spellWorld.letters.map((item, index) => (
-                <ExaminerScoring
-                  key={`letter-${index}`}
-                  label={`Letter ${index + 1}`}
-                  labelVariant="row"
-                  hint={
-                    SPELL_WORLD_EXPECTED[index]
-                      ? `Expected: ${SPELL_WORLD_EXPECTED[index]}`
-                      : undefined
-                  }
-                  value={item.correct}
-                  onChange={(value) =>
-                    update((draft) => {
-                      draft.attention.spellWorld.letters[index].correct = value;
-                    })
-                  }
-                />
-              ))}
-            </div>
-          </div>
+          <SpellWorldBlock state={state} update={update} />
         )}
       </div>
     </SectionShell>
@@ -289,9 +392,8 @@ export const DelayedRecallSection: React.FC<SectionProps> = ({ state, update }) 
       instructions={
         <ExaminerInstructions>
           Ask: &ldquo;Earlier I told you the names of three things. Can you tell
-          me what those were?&rdquo; Record the patient&apos;s recall, then give 1
-          point for each object correctly recalled. Objects presented during
-          Registration:
+          me what those were?&rdquo; Record the patient&apos;s recall — the AI scores
+          each object automatically. Objects presented during Registration:
           <ul className="mt-3 space-y-1">
             {REGISTRATION_OBJECTS.map((obj, index) => (
               <li key={obj} className="font-medium text-white">
@@ -303,20 +405,16 @@ export const DelayedRecallSection: React.FC<SectionProps> = ({ state, update }) 
       }
     >
       {state.delayedRecall.items.map((item, index) => (
-        <ScoredResponse
+        <AIScoredResponse
           key={index}
-          prompt={`Response ${index + 1}`}
-          response={item.response}
-          onResponseChange={(value) =>
+          section="delayed_recall"
+          itemKey={String(index + 1)}
+          question={`Response ${index + 1}`}
+          expected={REGISTRATION_OBJECTS[index]}
+          item={item}
+          update={(patch) =>
             update((draft) => {
-              draft.delayedRecall.items[index].response = value;
-            })
-          }
-          responsePlaceholder="Patient's response"
-          score={item.correct}
-          onScoreChange={(value) =>
-            update((draft) => {
-              draft.delayedRecall.items[index].correct = value;
+              Object.assign(draft.delayedRecall.items[index], patch);
             })
           }
         />
@@ -333,57 +431,35 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update }) => {
       maxScore={2}
       instructions={
         <ExaminerInstructions>
-          Point to or show each item and ask: &ldquo;What is this?&rdquo; Record
-          the patient&apos;s response, then give 1 point for each item correctly
-          named. The patient answers verbally.
+          Show each item to the patient and ask: &ldquo;What is this?&rdquo; Record the
+          patient&apos;s response — the AI scores it automatically and accepts common
+          synonyms. The patient answers verbally.
         </ExaminerInstructions>
       }
     >
       {NAMING_ITEMS.map((item) => {
         const isWatch = item === 'Wristwatch';
         const naming = isWatch ? state.naming.watch : state.naming.pencil;
+        const expected = isWatch ? 'wristwatch' : 'pencil';
         return (
-          <div
+          <AIScoredResponse
             key={item}
-            className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4"
-          >
-            <div className="flex flex-col items-center gap-1 text-center">
-              <span className="text-lg font-semibold text-white">{item}</span>
-              <p className="text-sm text-gray-400">&ldquo;What is this?&rdquo;</p>
-            </div>
-            <PatientResponse
-              value={naming.response}
-              onChange={(value) =>
-                update((draft) => {
-                  if (isWatch) {
-                    draft.naming.watch.response = value;
-                  } else {
-                    draft.naming.pencil.response = value;
-                  }
-                })
-              }
-              placeholder="Patient's response"
-            />
-            <div className="pt-4 border-t border-white/10">
-              <ExaminerScoring
-                label={
-                  isWatch
-                    ? 'Examiner scoring — watch named correctly'
-                    : 'Examiner scoring — pencil named correctly'
+            section="naming"
+            itemKey={isWatch ? 'wristwatch' : 'pencil'}
+            question="What is this?"
+            hint={`Present the object to the patient: ${item}`}
+            expected={expected}
+            item={naming}
+            update={(patch) =>
+              update((draft) => {
+                if (isWatch) {
+                  Object.assign(draft.naming.watch, patch);
+                } else {
+                  Object.assign(draft.naming.pencil, patch);
                 }
-                value={naming.correct}
-                onChange={(value) =>
-                  update((draft) => {
-                    if (isWatch) {
-                      draft.naming.watch.correct = value;
-                    } else {
-                      draft.naming.pencil.correct = value;
-                    }
-                  })
-                }
-              />
-            </div>
-          </div>
+              })
+            }
+          />
         );
       })}
     </SectionShell>
@@ -399,8 +475,9 @@ export const RepetitionSection: React.FC<SectionProps> = ({ state, update }) => 
       instructions={
         <ExaminerInstructions>
           Say: &ldquo;I am going to say a phrase. Please repeat it exactly: No ifs,
-          ands, or buts.&rdquo; Record the patient&apos;s actual response, then give
-          1 point if it is repeated correctly on the first try.
+          ands, or buts.&rdquo; Record the patient&apos;s actual response — the AI scores
+          it automatically, allowing harmless case, punctuation, or minor wording
+          differences. Low-confidence results are flagged for review.
         </ExaminerInstructions>
       }
     >
@@ -408,19 +485,15 @@ export const RepetitionSection: React.FC<SectionProps> = ({ state, update }) => 
         <p className="text-sm text-gray-400 mb-1">Phrase to repeat</p>
         <p className="text-lg italic text-white">&ldquo;{REPETITION_PHRASE}&rdquo;</p>
       </div>
-      <ScoredResponse
-        prompt="Repeat the phrase for the patient, then record their response"
-        response={state.repetition.response}
-        onResponseChange={(value) =>
+      <AIScoredResponse
+        section="repetition"
+        itemKey="phrase"
+        question="Repeat the phrase for the patient, then record their response"
+        expected={REPETITION_PHRASE}
+        item={state.repetition}
+        update={(patch) =>
           update((draft) => {
-            draft.repetition.response = value;
-          })
-        }
-        responsePlaceholder="Patient's response"
-        score={state.repetition.correct}
-        onScoreChange={(value) =>
-          update((draft) => {
-            draft.repetition.correct = value;
+            Object.assign(draft.repetition, patch);
           })
         }
       />
@@ -437,9 +510,9 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update 
       instructions={
         <ExaminerInstructions>
           Give the patient a blank piece of paper, then say: &ldquo;Take the paper in
-          your right hand, fold it in half, and put it on the floor.&rdquo; Score each
-          action independently based on what you observe. The patient does not
-          type anything.
+          your right hand, fold it in half, and put it on the floor.&rdquo; This is a
+          physical/visual observation task, so it is scored by the examiner — not
+          by the AI. Score each action independently.
         </ExaminerInstructions>
       }
     >
@@ -501,7 +574,8 @@ export const ReadingSection: React.FC<SectionProps> = ({ state, update }) => {
       instructions={
         <ExaminerInstructions>
           Show the instruction card below to the patient. Do NOT read it aloud.
-          Give 1 point if the patient reads it and performs the instruction.
+          Automated vision scoring is not implemented yet, so the examiner records
+          this observation manually.
         </ExaminerInstructions>
       }
     >
@@ -555,36 +629,28 @@ export const WritingSection: React.FC<SectionProps> = ({ state, update }) => {
       maxScore={1}
       instructions={
         <ExaminerInstructions>
-          Ask: &ldquo;{WRITING_PROMPT}&rdquo; Give 1 point if the sentence contains a
-          noun and a verb. Do not grade spelling or grammar automatically — the
-          examiner decides.
+          Ask: &ldquo;{WRITING_PROMPT}&rdquo; The only scoring criterion is that the
+          sentence contains a noun and a verb. The AI checks only that criterion —
+          never spelling, grammar, handwriting, or intelligence. The examiner can
+          override the result.
         </ExaminerInstructions>
       }
     >
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
-        <p className="text-sm font-medium text-white">{WRITING_PROMPT}</p>
-        <PatientResponse
-          multiline
-          value={state.writing.response}
-          onChange={(value) =>
-            update((draft) => {
-              draft.writing.response = value;
-            })
-          }
-          placeholder="Sentence written by the patient"
-        />
-        <div className="pt-4 border-t border-white/10">
-          <ExaminerScoring
-            hint="Give 1 point if the sentence contains a noun and a verb"
-            value={state.writing.correct}
-            onChange={(value) =>
-              update((draft) => {
-                draft.writing.correct = value;
-              })
-            }
-          />
-        </div>
-      </div>
+      <AIScoredResponse
+        section="writing"
+        itemKey="sentence"
+        question={WRITING_PROMPT}
+        expected=""
+        item={state.writing}
+        update={(patch) =>
+          update((draft) => {
+            Object.assign(draft.writing, patch);
+          })
+        }
+        speech={false}
+        multiline
+        placeholder="Sentence written by the patient"
+      />
     </SectionShell>
   );
 };
@@ -598,8 +664,8 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update }) => {
       instructions={
         <ExaminerInstructions>
           Show the reference figure to the patient and ask them to copy it as
-          exactly as possible. The examiner remains the final scorer — the drawing
-          is never auto-scored.
+          exactly as possible. Automated vision scoring is not implemented yet —
+          the examiner judges the copy manually.
         </ExaminerInstructions>
       }
     >

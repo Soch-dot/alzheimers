@@ -1,13 +1,29 @@
 export type ScoreMark = boolean | null;
 
+export type AssessmentStatus = 'idle' | 'assessing' | 'assessed' | 'error';
+
+export interface AIScore {
+  correct: boolean;
+  confidence: number;
+  reason: string;
+}
+
 /**
- * Patient responses are stored separately from examiner scores:
- * `response` records the patient's actual answer text (never auto-scored),
- * `correct` is the examiner's independent Correct/Incorrect mark.
+ * Per-item state for AI-scored questions.
+ *
+ * The patient's response text and the score are kept separate. The score is
+ * normally set automatically by the AI service; the examiner can override it
+ * (`manual`) or must resolve low-confidence results (`reviewRequired` ->
+ * `reviewed`) before the item counts as complete.
  */
 export interface ItemState {
   response: string;
-  correct: ScoreMark;
+  status: AssessmentStatus;
+  aiScore: AIScore | null;
+  reviewRequired: boolean;
+  reviewed: boolean;
+  manual: boolean | null;
+  error: string | null;
 }
 
 export type TimeKey = 'year' | 'season' | 'date' | 'day' | 'month';
@@ -87,7 +103,15 @@ export type SectionId =
   | 'copying';
 
 function blank(): ItemState {
-  return { response: '', correct: null };
+  return {
+    response: '',
+    status: 'idle',
+    aiScore: null,
+    reviewRequired: false,
+    reviewed: false,
+    manual: null,
+    error: null,
+  };
 }
 
 export function createInitialMMSEState(): MMSEState {
@@ -129,7 +153,20 @@ export function createInitialMMSEState(): MMSEState {
   };
 }
 
-function count(marks: ScoreMark[]): number {
+/** The effective score for an item: examiner manual verdict wins over AI. */
+export function effectiveCorrect(item: ItemState): boolean | null {
+  if (item.manual !== null) return item.manual;
+  return item.aiScore ? item.aiScore.correct : null;
+}
+
+/** Whether an item's score is final (counts toward section completion). */
+export function isItemFinalized(item: ItemState): boolean {
+  if (item.manual !== null) return true;
+  if (!item.aiScore) return false;
+  return item.reviewRequired ? item.reviewed : true;
+}
+
+function countTrue(marks: ScoreMark[]): number {
   return marks.reduce((total, mark) => total + (mark === true ? 1 : 0), 0);
 }
 
@@ -149,30 +186,30 @@ export interface MMSEScores {
 
 export function computeScores(state: MMSEState): MMSEScores {
   return {
-    orientationTime: count(
-      Object.values(state.orientationTime.items).map((item) => item.correct)
+    orientationTime: countTrue(
+      Object.values(state.orientationTime.items).map(effectiveCorrect)
     ),
-    orientationPlace: count(
-      Object.values(state.orientationPlace.items).map((item) => item.correct)
+    orientationPlace: countTrue(
+      Object.values(state.orientationPlace.items).map(effectiveCorrect)
     ),
-    registration: count(state.registration.items.map((item) => item.correct)),
-    attention: count(
+    registration: countTrue(state.registration.items.map(effectiveCorrect)),
+    attention: countTrue(
       (
         state.attention.task === 'serial7'
           ? state.attention.serial7
           : state.attention.spellWorld.letters
-      ).map((item) => item.correct)
+      ).map(effectiveCorrect)
     ),
-    delayedRecall: count(state.delayedRecall.items.map((item) => item.correct)),
-    naming: count([state.naming.watch.correct, state.naming.pencil.correct]),
-    repetition: state.repetition.correct === true ? 1 : 0,
-    command: count([
+    delayedRecall: countTrue(state.delayedRecall.items.map(effectiveCorrect)),
+    naming: countTrue([effectiveCorrect(state.naming.watch), effectiveCorrect(state.naming.pencil)]),
+    repetition: effectiveCorrect(state.repetition) === true ? 1 : 0,
+    command: countTrue([
       state.command.tookPaper,
       state.command.foldedPaper,
       state.command.placedFloor,
     ]),
     reading: state.reading.correct === true ? 1 : 0,
-    writing: state.writing.correct === true ? 1 : 0,
+    writing: effectiveCorrect(state.writing) === true ? 1 : 0,
     copying: state.copying === true ? 1 : 0,
   };
 }
@@ -197,30 +234,21 @@ export function computeTotal(state: MMSEState): number {
 export function isSectionComplete(id: SectionId, state: MMSEState): boolean {
   switch (id) {
     case 'orientationTime':
-      return Object.values(state.orientationTime.items).every(
-        (item) => item.correct !== null
-      );
+      return Object.values(state.orientationTime.items).every(isItemFinalized);
     case 'orientationPlace':
-      return Object.values(state.orientationPlace.items).every(
-        (item) => item.correct !== null
-      );
+      return Object.values(state.orientationPlace.items).every(isItemFinalized);
     case 'registration':
-      return state.registration.items.every((item) => item.correct !== null);
+      return state.registration.items.every(isItemFinalized);
     case 'attention':
       return state.attention.task === 'serial7'
-        ? state.attention.serial7.every((item) => item.correct !== null)
-        : state.attention.spellWorld.letters.every(
-            (item) => item.correct !== null
-          );
+        ? state.attention.serial7.every(isItemFinalized)
+        : state.attention.spellWorld.letters.every(isItemFinalized);
     case 'delayedRecall':
-      return state.delayedRecall.items.every((item) => item.correct !== null);
+      return state.delayedRecall.items.every(isItemFinalized);
     case 'naming':
-      return (
-        state.naming.watch.correct !== null &&
-        state.naming.pencil.correct !== null
-      );
+      return isItemFinalized(state.naming.watch) && isItemFinalized(state.naming.pencil);
     case 'repetition':
-      return state.repetition.correct !== null;
+      return isItemFinalized(state.repetition);
     case 'command':
       return (
         state.command.tookPaper !== null &&
@@ -230,7 +258,7 @@ export function isSectionComplete(id: SectionId, state: MMSEState): boolean {
     case 'reading':
       return state.reading.correct !== null;
     case 'writing':
-      return state.writing.correct !== null;
+      return isItemFinalized(state.writing);
     case 'copying':
       return state.copying !== null;
   }

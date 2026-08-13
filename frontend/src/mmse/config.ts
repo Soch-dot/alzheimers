@@ -5,6 +5,14 @@ import type {
   TimeKey,
 } from './state';
 
+/**
+ * CONFIGURABLE: below this AI confidence (0–1) the item is flagged
+ * "Review required" and does not count as complete until the examiner accepts
+ * or overrides the AI result. Confidence is a model/service signal, never a
+ * clinical certainty.
+ */
+export const AI_CONFIDENCE_REVIEW_THRESHOLD = 0.7;
+
 export const MMSE_SECTIONS: { id: SectionId; title: string; max: number }[] = [
   { id: 'orientationTime', title: 'Orientation to Time', max: 5 },
   { id: 'orientationPlace', title: 'Orientation to Place', max: 5 },
