@@ -395,7 +395,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `73ef09c` | `feat(mmse): record patient responses separately from examiner scoring` | Response-recording UX |
 | 2026-08-13 | `1235955` | `feat(mmse): add ai-assisted response scoring` | AI-assisted per-item scoring (pre-batch) |
 | 2026-08-13 | `8cadbc5` | `refactor(mmse): batch AI assessment with a single evaluate request` | Two-phase batch workflow |
-| 2026-08-13 | `<pending-ux>` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
+| 2026-08-13 | `babcb03` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
 
 ---
 
