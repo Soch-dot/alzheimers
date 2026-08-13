@@ -284,10 +284,26 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
 
   // Not yet assessed (or the item failed and has no score).
   if (!item.aiScore) {
+    const empty = (item.response ?? '').trim() === '';
     return (
       <div>
-        <p className="text-xs text-gray-500">{notAssessedHint}</p>
-        {item.error && <p className="text-xs text-amber-300 mt-1">{item.error}</p>}
+        {empty ? (
+          <p className="text-xs text-gray-500">Response required</p>
+        ) : item.error ? (
+          <>
+            <p className="text-xs text-amber-300">AI assessment unavailable for this item.</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[11px] text-gray-600 hover:text-gray-400 transition-colors">
+                View technical details
+              </summary>
+              <pre className="mt-1 text-[10px] leading-relaxed text-gray-600 whitespace-pre-wrap break-words max-h-28 overflow-auto rounded-md bg-white/[0.03] p-2">
+                {item.error}
+              </pre>
+            </details>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">{notAssessedHint}</p>
+        )}
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {onRetry && item.manual === null && (
             <button type="button" onClick={onRetry} className={ghostButtonClass}>
@@ -308,7 +324,7 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`text-sm font-semibold ${ai.correct ? 'text-emerald-300' : 'text-rose-300'}`}>
-          {ai.correct ? '✓ Likely correct' : '✕ Likely incorrect'}
+          {ai.correct ? '✓ Correct response' : '✕ Incorrect response'}
         </span>
         {item.reviewRequired && !item.reviewed && (
           <span className="text-xs font-semibold text-amber-300">⚠ Review required</span>
@@ -370,8 +386,12 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
 interface AIScoredResponseProps {
   question: string;
   hint?: string;
-  /** When false (e.g. expected answer not configured), the item is manual-only. */
-  aiEnabled?: boolean;
+  /**
+   * When set (e.g. an Orientation to Place item whose location field has not
+   * been configured yet), the item records the response but is not AI-evaluated
+   * and shows this examiner-facing notice instead of manual scoring.
+   */
+  disabledNotice?: string;
   item: ItemState;
   update: (patch: Partial<ItemState>) => void;
   speech?: boolean;
@@ -385,7 +405,7 @@ interface AIScoredResponseProps {
 export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
   question,
   hint,
-  aiEnabled = true,
+  disabledNotice,
   item,
   update,
   speech = true,
@@ -448,7 +468,7 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
     </div>
   );
 
-  if (!aiEnabled) {
+  if (disabledNotice) {
     return (
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
         {top}
@@ -457,12 +477,13 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
           {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
         </div>
         <PatientResponse value={item.response} onChange={onResponseChange} placeholder={placeholder} />
-        <div className="pt-4 border-t border-white/10">
-          <p className="text-xs text-amber-300/90 mb-2">
-            Expected answer not configured for this item — score manually.
-          </p>
-          <ExaminerScoring value={item.manual} onChange={(value) => update({ manual: value })} />
-        </div>
+        {phase === 'collect' && item.response.trim() ? (
+          <div className="pt-3 border-t border-white/10 flex items-center gap-2">
+            <span className="text-emerald-300">✓</span>
+            <p className="text-xs text-gray-400">Response recorded</p>
+          </div>
+        ) : null}
+        <p className="text-xs text-amber-300/80">{disabledNotice}</p>
       </div>
     );
   }
@@ -481,7 +502,12 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
             <span className="text-emerald-300">✓</span>
             <p className="text-xs text-gray-400">Response recorded</p>
           </div>
-        ) : null
+        ) : (
+          <div className="pt-3 border-t border-white/10 flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-600" />
+            <p className="text-xs text-gray-600">Response required</p>
+          </div>
+        )
       ) : (
         <div className="pt-4 border-t border-white/10">
           <AIResultPanel
@@ -504,6 +530,8 @@ interface SectionShellProps {
   children: React.ReactNode;
   phase: MmsePhase;
   responseCount?: number;
+  /** 'ai' sections are scored by the AI batch; 'observation' sections are recorded by the examiner (vision later). */
+  kind?: 'ai' | 'observation';
 }
 
 export const SectionShell: React.FC<SectionShellProps> = ({
@@ -514,6 +542,7 @@ export const SectionShell: React.FC<SectionShellProps> = ({
   children,
   phase,
   responseCount = 0,
+  kind,
 }) => {
   return (
     <motion.div
@@ -523,7 +552,20 @@ export const SectionShell: React.FC<SectionShellProps> = ({
     >
       <GlassCard>
         <div className="flex items-start justify-between gap-4 mb-6">
-          <h3 className="text-xl md:text-2xl font-semibold text-white tracking-tight">{title}</h3>
+          <div>
+            <h3 className="text-xl md:text-2xl font-semibold text-white tracking-tight">{title}</h3>
+            {kind && (
+              <span
+                className={`inline-block mt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] px-2 py-0.5 rounded-md border ${
+                  kind === 'ai'
+                    ? 'text-blue-300 bg-blue-500/10 border-blue-400/20'
+                    : 'text-amber-300 bg-amber-500/10 border-amber-400/20'
+                }`}
+              >
+                {kind === 'ai' ? 'AI-assessed' : 'Observation-based'}
+              </span>
+            )}
+          </div>
           {phase === 'collect' ? (
             <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
               {responseCount} <span className="text-gray-500">/ {maxScore} responses</span>

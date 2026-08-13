@@ -10,6 +10,7 @@ import {
 import {
   applyBatchResultsToDraft,
   buildBatchItems,
+  countAssessmentErrors,
   isSectionResponseComplete,
   sectionResponseCounts,
 } from '../../mmse/batch';
@@ -53,11 +54,18 @@ const SECTION_COMPONENTS: Record<SectionId, React.FC<SectionProps>> = {
 const INTRO_STEP = 0;
 const SUMMARY_STEP = MMSE_SECTIONS.length + 1;
 
+/** User-facing batch error info. The technical detail stays behind a disclosure. */
+export interface BatchErrorInfo {
+  title: string;
+  subtitle: string;
+  detail: string | null;
+}
+
 export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) => {
   const [step, setStep] = useState(INTRO_STEP);
   const [state, setState] = useState<MMSEState>(createInitialMMSEState);
   const [phase, setPhase] = useState<MmsePhase>('collect');
-  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchError, setBatchError] = useState<BatchErrorInfo | null>(null);
 
   const update = (updater: (draft: MMSEState) => void) => {
     setState((prev) => {
@@ -105,7 +113,21 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
       }
     } catch (err) {
       setPhase('error');
-      setBatchError(isTimeoutError(err) ? 'AI assessment timed out.' : extractApiError(err));
+      const detail = extractApiError(err) || null;
+      if (isTimeoutError(err)) {
+        setBatchError({
+          title: 'AI assessment timed out.',
+          subtitle:
+            'The assessment request took too long and was cancelled. Please retry, or score the items manually.',
+          detail,
+        });
+      } else {
+        setBatchError({
+          title: 'AI assessment unavailable',
+          subtitle: 'The selected AI provider is currently unavailable.',
+          detail,
+        });
+      }
     }
   };
 
@@ -113,6 +135,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
   const scores = computeScores(state);
   const responseCounts = sectionResponseCounts(state);
   const pendingAssessCount = Object.keys(buildBatchItems(state, true)).length;
+  const errorItemCount = countAssessmentErrors(state);
   const allFinalized = MMSE_SECTIONS.every((s) => isSectionComplete(s.id, state));
 
   const jumpToReview = () => {
@@ -133,6 +156,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
         responseCounts={responseCounts}
         batchError={batchError}
         needsReassessCount={pendingAssessCount}
+        errorItemCount={errorItemCount}
         allFinalized={allFinalized}
         onAssess={() => void runBatchAssessment()}
         onReview={jumpToReview}

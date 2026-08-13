@@ -28,7 +28,10 @@
 - **AI-assisted 11-section MMSE questionnaire** (replaces the raw MMSE number input) with a **two-phase batch workflow**:
   1. **Collect responses** — the examiner/patient complete the whole questionnaire; the app only records responses (typed or speech). **No AI calls, no per-question assessment, no "Assessing…" states.**
   2. **Assess MMSE with AI** — one explicit button sends a **single batch** `POST /mmse/evaluate` with all collected responses; the backend returns per-item structured results. The examiner reviews (low-confidence → "Review required") and can override manually. Final `mmse` (0–30) flows into the existing `/predict`.
-- Provider-agnostic AI service (Ollama or Gemini); failure/timeout always resolves to a clear error with Retry + Manual review — never an indefinite spinner.
+- Provider-agnostic AI service (Ollama or Gemini); failure/timeout always resolves to a clear error with Retry + Manual review — never an indefinite spinner. **Raw OS/network/backend error text is never shown in the normal UI** — it lives behind a collapsed "View technical details" disclosure or console.
+- **Location-aware Orientation to Place:** the examiner configures the assessment location (state / county / town / building / floor) in a clean in-app form at the top of the section; those values are the reference answers for the batch and are never shown to the patient. No source-code paths or developer config exposed.
+- **Semantic response evaluation:** the AI judges the *meaning* of a response, not its formatting (case/punctuation/spacing/number-as-words/synonyms are not penalized). Results display as "✓ Correct response" / "✕ Incorrect response" / "⚠ Review required" / "Response required".
+- **Observation-based sections** (Three-Step Command, Reading, Copying) are clearly labelled as such, with an "AI vision assistance will be added in a later milestone" note — the examiner is not presented as the intended permanent scorer.
 - Browser speech capture (Web Speech API, no new dependency) with graceful degradation to typing; transcripts only populate the response field and never trigger AI.
 - Training-time static SHAP artifacts (plots + `shap_data.pkl`). **There is no live per-patient SHAP endpoint.**
 
@@ -122,7 +125,7 @@ alzheimers_ml_project/
     ├── src/api.ts                    # Axios client + PredictionResponse/PatientInput types + /mmse/evaluate batch client
     ├── src/mmse/state.ts             # MMSE state types, initial state, scoring, completion checks, MmsePhase
     ├── src/mmse/batch.ts             # Batch payload builder, per-item result applier, response-completeness helpers
-    ├── src/mmse/config.ts            # MMSE config: objects, expected answers, reference figure path
+    ├── src/mmse/config.ts            # MMSE config: objects, expected answers (non-location), LOCATION_FIELDS
     └── src/components/
         ├── index.ts                  # Barrel exports for all UI components
         ├── Layout.tsx, FormPanel.tsx, InputField.tsx, SelectField.tsx, AnalyzeButton.tsx,
@@ -130,6 +133,7 @@ alzheimers_ml_project/
         └── mmse/                     # MMSE questionnaire UI (two-phase: collect → batch assess)
             ├── MMSEAssessment.tsx    # Stepper container (intro → 11 sections → summary) + batch orchestrator
             ├── MMSEIntroduction.tsx, MMSESummary.tsx, DrawingCanvas.tsx, primitives.tsx, sections.tsx, index.ts
+            # sections.tsx: 11 sections; OrientationPlace hosts the examiner-only assessment-location form
 ```
 
 ### Important files — modification policy
@@ -197,7 +201,8 @@ alzheimers_ml_project/
   }
   ```
   - Keys are `"<section>.<item_key>"`. `section` is one of: `orientation_time, orientation_place, registration, attention_serial7, attention_spell_world, delayed_recall, naming, repetition, writing`. The backend derives `section`/`item_key` from the key; the frontend never sends empty/unanswered responses.
-  - `expected` is the hidden evaluation context (examiner-only). For `orientation_time` the backend derives today's date-based expected answer server-side and ignores the client value.
+  - `expected` is the hidden evaluation context (examiner-only). For `orientation_time` the backend derives today's date-based expected answer server-side and ignores the client value. For `orientation_place` the frontend sends the examiner-configured assessment-location values as `expected`.
+  - **Semantic evaluation:** the system prompt instructs the model to judge the *meaning* of the response — never marking incorrect solely for capitalization, punctuation, spacing, numbers written as words (e.g. "2026" vs "two thousand twenty-six"), or harmless synonyms.
 - **Response (per-item structured results):**
   ```json
   {
@@ -237,23 +242,27 @@ alzheimers_ml_project/
 - **Why it exists:** Replaces the single raw "MMSE Score" number input with an AI-assisted examiner-supervised questionnaire, while keeping the API contract unchanged (only the computed total is sent as `mmse`).
 - **Two-phase workflow (batch — NOT per-question):**
   1. **Collect responses.** The patient/examiner move through all 11 sections; the app only records responses (typed or speech). **No AI calls, no per-item assessment, no confidence display.** Sections show "n / max responses" and a "✓ Response recorded" marker.
-  2. **Assess MMSE with AI.** On the Summary the examiner taps the single "Assess MMSE with AI" button → **one** batch `POST /mmse/evaluate` with every applicable, answered response → per-item results are applied → results shown per item ("✓ Likely correct / ✕ Likely incorrect / AI confidence / ⚠ Review required") → MMSE total updates → "Continue to Analysis" → existing `/predict`.
+  2. **Assess MMSE with AI.** On the Summary the examiner taps the single "Assess MMSE with AI" button → **one** batch `POST /mmse/evaluate` with every applicable, answered response → per-item results are applied → results shown per item ("✓ Correct response / ✕ Incorrect response / AI confidence / ⚠ Review required") → MMSE total updates → "Continue to Analysis" → existing `/predict`.
   - The batch is built by `buildBatchItems()` (`src/mmse/batch.ts`); results applied by `applyBatchResultsToDraft()`. Editing a response after assessment clears its AI score and the item is re-assessed on the next batch (only missing/unscored items are re-sent).
+- **Result states per response:** a correct/incorrect verdict; a low-confidence item → "⚠ Review required" (not finalized until Accept/Override); an empty response → "Response required" (empty responses are never sent to the batch); a per-item failure → "AI assessment unavailable for this item." with technical detail behind a disclosure.
 - **Structure:** 11 sections, max total **30**:
   1. Orientation to Time (5) — year/season/date/day/month; AI-scored against server-derived date values.
-  2. Orientation to Place (5) — state/county/town/building/floor; AI-scored against per-location `PLACE_ITEMS` expected answers; **unconfigured items are manual-only** ("score manually").
+  2. Orientation to Place (5) — state/county/town/building/floor; **location-aware**: the examiner configures the assessment location in a clean in-app form at the top of the section (examiner-only), and those values are used as the reference answers by the AI batch. Patient-facing UI never shows them. No source-code paths / developer config exposed.
   3. Registration (3) — 3 objects (`REGISTRATION_OBJECTS`, configurable); AI-scored; objects reused for Delayed Recall.
   4. Attention & Calculation (5) — Serial-7s (5 fields) or spell WORLD backwards (full response split into per-letter scores); AI-scored; expected sequence examiner-only.
   5. Delayed Recall (3) — recalls the same Registration objects; AI-scored.
   6. Naming (2) — wristwatch, pencil; AI-scored (accepts synonyms like wristwatch/watch).
   7. Repetition (1) — "No ifs, ands, or buts."; AI-scored (allows case/punctuation differences; low confidence → review).
-  8. Three-Step Command (3) — right hand / fold / floor; **manual examiner observations** (physical task, no AI).
-  9. Reading (1) — "CLOSE YOUR EYES"; **manual examiner observation** + optional note. Automated vision scoring NOT implemented (documented limitation).
+  8. Three-Step Command (3) — right hand / fold / floor; **observation-based** (badge + "AI vision assistance will be added in a later milestone"). Examiner records observations.
+  9. Reading (1) — "CLOSE YOUR EYES"; **observation-based** + optional note. Automated vision scoring NOT implemented (documented limitation).
   10. Writing (1) — sentence with noun and verb; **AI-scored on that criterion only** (never spelling/grammar/handwriting/intelligence).
-  11. Copying (1) — reference figure + drawing canvas + **manual examiner scoring**. Vision workflow planned separately; **not implemented in the AI-scoring task**.
+  11. Copying (1) — reference figure + drawing canvas; **observation-based**. Vision workflow planned separately; placeholder for the missing figure remains (no developer text).
 - **AI confidence:** model/service signal only, never clinical certainty. Confidence < `AI_CONFIDENCE_REVIEW_THRESHOLD` (0.7, config.ts) → item flagged "⚠ Review required"; it does not count as complete until the examiner accepts the AI result or overrides.
-- **Failure handling (never an indefinite spinner):** the batch resolves to success, error, or timeout. On failure the Summary shows "AI assessment unavailable." (provider/config) or "AI assessment timed out." (axios 90s timeout) with Retry + Manual review; per-item failures show the specific error with Retry / "Score manually". Invalid AI output is never scored silently (goes to `errors`, item marked `error`).
-- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI.
+- **Failure handling (never an indefinite spinner):** the batch resolves to success, error, or timeout.
+  - Provider down/config off → Summary: "AI assessment unavailable" + "The selected AI provider is currently unavailable." + [Retry]. The raw OS/network error is **never shown in the normal UI** — it sits behind a "View technical details" disclosure.
+  - Timeout (axios 90s) → "AI assessment timed out." + [Retry].
+  - Partial failure → "Some responses could not be assessed." + [Review items] (+ re-assess for the still-missing items). Per-item failures show "AI assessment unavailable for this item." with technical detail behind a disclosure. Invalid AI output is never scored silently (goes to `errors`, item marked `error`).
+- **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI. `MMSEState.location` holds the examiner-configured assessment location (reference answers for Orientation to Place).
 - **Speech capture:** `useSpeechRecognition()` in `primitives.tsx` uses the native Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`), no new dependency. A transcript only populates the response field — it never triggers AI. Unsupported browsers degrade to typing with a notice.
 - **Flow to the API:** MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → existing `predictAlzheimers()` → `POST /predict`.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; during Phase 1 Next is enabled once the section's responses are complete (`isSectionResponseComplete`); after assessment it requires finalized scores (`isSectionComplete`); navigation is locked while the batch runs. Answers persist when navigating back.
@@ -273,6 +282,8 @@ alzheimers_ml_project/
 - **Animations:** Framer Motion entrance animations (fade + slide + scale), `ease: [0.16, 1, 0.3, 1]`, animated probability bars, spinner.
 - **Responsive:** Two-column desktop layout (form/MMSE left, results right), stacking on mobile; no horizontal scroll; MMSE drawing canvas supports mouse + touch (Pointer Events, `touch-none`).
 - **Reusable components:** `Layout`, `FormPanel`, `InputField`, `SelectField`, `AnalyzeButton`, `ResultCard`, `PredictionPieChart`, `ErrorMessage`, `EmptyState` (supports contextual `title`/`description`/`showAnalyze` variants), plus MMSE primitives (`GlassCard`, `ExaminerInstructions`, `PatientResponse`, `ExaminerScoring`, `AIResultPanel`, `AIScoredResponse`, `useSpeechRecognition`, `SectionShell`, `inputClass`).
+- **MMSE section badges:** `SectionShell` shows a small pill next to each section title — blue "AI-assessed" for the 8 AI sections, amber "Observation-based" for Three-Step Command / Reading / Copying.
+- **Assessment-location form:** a clean examiner-only form (state / county / town / building / floor) at the top of the Orientation to Place section; styled with the standard `inputClass` inputs. Expected answers are never rendered in the patient-facing question/response UI.
 
 > **Do not redesign the application unless explicitly requested.**
 
@@ -288,6 +299,10 @@ alzheimers_ml_project/
 - [x] MMSE questionnaire (11 sections, 0–30) with **two-phase batch workflow** (collect → one "Assess MMSE with AI" action)
 - [x] AI-assisted batch evaluation (`POST /mmse/evaluate`, provider-agnostic: Ollama/Gemini, per-item results)
 - [x] No AI calls while answering — typing/speech/Enter never triggers evaluation
+- [x] Location-aware Orientation to Place (examiner-configured assessment location; expected answers never shown to the patient)
+- [x] Semantic response evaluation (meaning, not formatting) with "✓ Correct response / ✕ Incorrect response / ⚠ Review required / Response required" display
+- [x] Observation-based sections clearly labelled (vision noted as a later milestone)
+- [x] Friendly error states with Retry + "View technical details" disclosure (raw OS/network errors never in the normal UI)
 - [x] Browser speech capture (Web Speech API) with typing fallback
 - [x] Examiner review/override of AI scores (incl. low-confidence review flow)
 - [x] Timeout/failure handling with Retry + Manual review (never stuck loading)
@@ -380,6 +395,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `73ef09c` | `feat(mmse): record patient responses separately from examiner scoring` | Response-recording UX |
 | 2026-08-13 | `1235955` | `feat(mmse): add ai-assisted response scoring` | AI-assisted per-item scoring (pre-batch) |
 | 2026-08-13 | `8cadbc5` | `refactor(mmse): batch AI assessment with a single evaluate request` | Two-phase batch workflow |
+| 2026-08-13 | `<pending-ux>` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
 
 ---
 
@@ -387,7 +403,7 @@ alzheimers_ml_project/
 
 ### Immediate
 - Configure a real AI provider (Ollama local, or Gemini with a backend `GEMINI_API_KEY`) and validate live AI-scored responses before release. `AI_PROVIDER`/model/base URLs live in backend env (never in React).
-- Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`); optionally configure `PLACE_ITEMS` answers per location.
+- Supply the exact MMSE copying figure as an image asset, set `COPYING_REFERENCE_IMAGE` (`frontend/src/mmse/config.ts`).
 
 ### Next
 - Vision-assisted evaluation of the copied figure (Question 11) as a documented workflow (photograph → vision model → examiner review). Do NOT fold into the current AI-text evaluation.
@@ -409,40 +425,39 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
-- **AI-assisted MMSE batch scoring (two-phase):** Replaced per-question auto-assessment with a **two-phase batch workflow**.
-  - **Phase 1 (collect):** Answering the questionnaire records responses only — typing, speech, and Enter never trigger AI. Sections show "n / max responses" and a "✓ Response recorded" marker.
-  - **Phase 2 (assess):** The single "Assess MMSE with AI" action sends **one** batch `POST /mmse/evaluate` with all applicable answered responses; the backend evaluates them (parallel, ≤8 workers) and returns per-item validated results; results render per item ("✓ Likely correct / ✕ Likely incorrect / AI confidence / ⚠ Review required"), the 0–30 total updates, then "Continue to Analysis" → existing `/predict`.
-  - **Backend:** `backend/src/ai_eval.py` refactored to batch — `MMSEEvaluateRequest {items: {key: {question, response, expected}}}`, key = `"<section>.<item_key>"`, `evaluate_mmse_batch` (503 when AI disabled or all items fail at the provider; 422 for an empty/malformed batch; per-item `errors` map for invalid AI output — never a silent score). `api.py` changed only `POST /mmse/evaluate` to use the batch entry point; `/predict` contract, model, and SHAP untouched.
-  - **Frontend:** `src/mmse/state.ts` adds `MmsePhase = collect | assessing | assessed | error`; new `src/mmse/batch.ts` (`buildBatchItems`, `applyBatchResultsToDraft`, `sectionResponseCounts`, `isSectionResponseComplete`); `src/api.ts` now `evaluateMmseBatch` (axios 90s timeout, `isTimeoutError`); `AIAssessmentPanel` → `AIResultPanel`; `AIScoredResponse`/`SectionShell` phase-aware; `sections.tsx` two-phase; `MMSESummary.tsx` shows "✓ Responses complete → [Assess MMSE with AI]" / global "Assessing MMSE…" / "AI assessment unavailable." / "AI assessment timed out." / results; `MMSEAssessment.tsx` orchestrates the batch, gates navigation (response-complete before assess, finalized after), locks nav while assessing, and auto-jumps to the first incomplete section after assessment.
-  - Confidence is a model signal; threshold `AI_CONFIDENCE_REVIEW_THRESHOLD = 0.7`; low-confidence items need Accept/Override. Manual/observed sections (place with empty `expected`, three-step command, reading, copying) stay examiner-scored.
+- **MMSE UX refinements (post-batch):** Fixed the issues found in manual testing without redesigning or touching the batch architecture.
+  - **Location-aware Orientation to Place:** replaced empty per-item `expected` config with an examiner-configured "Assessment location" form (state / county / town / building / floor) at the top of the section. Those values become the reference answers in the batch and are never shown to the patient. Removed all `src/mmse/config.ts` / "Expected answer not configured" developer text.
+  - **Friendly error states:** raw OS/network/backend errors never appear in the normal UI. Provider failure → "AI assessment unavailable" + "The selected AI provider is currently unavailable." + [Retry]; timeout → "AI assessment timed out." + [Retry]; partial failure → "Some responses could not be assessed." + [Review items]. Raw detail lives behind a collapsed "View technical details" disclosure (both on the Summary and per item).
+  - **Observation sections:** Three-Step Command / Reading / Copying are labelled "Observation-based" with an "AI vision assistance will be added in a later milestone" note — not presented as examiner-as-permanent-scorer.
+  - **Response validation display:** results show "✓ Correct response / ✕ Incorrect response / ⚠ Review required / Response required"; the backend system prompt now explicitly evaluates *meaning*, not formatting (case/punctuation/spacing/number-as-words/synonyms are not penalized).
+  - No vision work (Q8/Q9/Q11), no figure invented, no canvas redesign; copying placeholder kept but cleaned of developer text.
+- **AI-assisted MMSE batch scoring (two-phase)** (prior milestone, committed `8cadbc5`): Replaced per-question auto-assessment with a two-phase batch workflow. Phase 1 records responses only (typing/speech/Enter never trigger AI); Phase 2 sends ONE batch `POST /mmse/evaluate` with all applicable answered responses, applies per-item validated results ("✓ Correct response / ✕ Incorrect response / AI confidence / ⚠ Review required"), updates the 0–30 total, then "Continue to Analysis" → existing `/predict`. Backend: `evaluate_mmse_batch` (503 AI disabled/all-provider-fail; 422 empty batch; per-item `errors` — never a silent score). `/predict` contract, model, and SHAP untouched.
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: **batch AI-assessment work is uncommitted** (see Files Recently Changed). Git branch `main`, tracking `origin/main`. Backend batch logic validation-tested (11 checks) + live `/mmse/evaluate` (batch) via a mock Gemini provider → 200 with per-item results; provider-unreachable → 503; `/predict` → 200 unchanged. Frontend `npm run build` (tsc + vite) passes; batch payload logic verified via a compiled Node harness; dev server serves HTTP 200. Real Ollama/Gemini model output not yet exercised on this machine (no Ollama runtime).
+- Working tree: **MMSE UX-refinement work is uncommitted** (see Files Recently Changed). Git branch `main`, tracking `origin/main`. Batch work committed as `8cadbc5` (+ `e9478e7` docs) and pushed. `npm run build` (tsc + vite) passes; batch payload logic (location-aware place items, response counts, error counts) verified via a compiled Node harness. Real Ollama/Gemini model output not yet exercised on this machine (no Ollama runtime).
 
 ### Next Recommended Task
 - Configure a real AI provider and smoke-test live AI responses (correct/incorrect paths) before release.
 - Supply the exact MMSE copying figure asset and set `COPYING_REFERENCE_IMAGE`.
-- Optionally set per-location expected answers in `PLACE_ITEMS` (`frontend/src/mmse/config.ts`).
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
-- `backend/src/ai_eval.py` (batch refactor — `MMSEEvaluateRequest {items}`, `evaluate_mmse_batch`, `_evaluate_single`, per-item errors)
-- `backend/src/api.py` (updated `POST /mmse/evaluate` to the batch entry point only; `/predict` untouched)
-- `frontend/src/api.ts` (`evaluateMmseBatch`, `isTimeoutError`, `MmseBatchItem/Result/Response`, `extractApiError`)
-- `frontend/src/mmse/state.ts` (`MmsePhase`; `ItemState`/`AIScore` model, `effectiveCorrect`, `isItemFinalized`)
-- `frontend/src/mmse/batch.ts` (**new** — `buildBatchItems`, `applyBatchResultsToDraft`, `sectionResponseCounts`, `isSectionResponseComplete`)
-- `frontend/src/components/mmse/primitives.tsx` (`AIResultPanel` replaces `AIAssessmentPanel`; phase-aware `AIScoredResponse`/`SectionShell`; `useSpeechRecognition`)
-- `frontend/src/components/mmse/sections.tsx` (two-phase sections; `SpellWorldBlock` no AI)
-- `frontend/src/components/mmse/MMSESummary.tsx` (phase-aware summary + "Assess MMSE with AI")
-- `frontend/src/components/mmse/MMSEAssessment.tsx` (batch orchestrator, nav gating, assessing banner)
-- Earlier: `frontend/src/App.tsx`, `frontend/src/components/index.ts`, `frontend/src/components/EmptyState.tsx`
+- `frontend/src/mmse/state.ts` (+`AssessmentLocation`; `MMSEState.location`)
+- `frontend/src/mmse/config.ts` (`PLACE_ITEMS` without hardcoded expected; `LOCATION_FIELDS` for the examiner location form)
+- `frontend/src/mmse/batch.ts` (`buildBatchItems` uses `state.location` for orientation_place; location-aware `sectionResponseCounts`; `collectAiItems`, `countAssessmentErrors`)
+- `frontend/src/components/mmse/primitives.tsx` (`SectionShell` AI/Observation badge; `AIResultPanel` "✓ Correct response / ✕ Incorrect response / Response required" + per-item friendly error with "View technical details"; `AIScoredResponse` `disabledNotice` replaces `aiEnabled`)
+- `frontend/src/components/mmse/sections.tsx` (OrientationPlace location form; observation wording for command/reading/copying; cleaned copying placeholder)
+- `frontend/src/components/mmse/MMSESummary.tsx` (friendly error state + "View technical details"; "Some responses could not be assessed." + [Review items])
+- `frontend/src/components/mmse/MMSEAssessment.tsx` (`BatchErrorInfo {title, subtitle, detail}`; `countAssessmentErrors`)
+- `frontend/src/components/mmse/MMSEIntroduction.tsx` (two-phase + observation note)
+- `backend/src/ai_eval.py` (system prompt: semantic evaluation — no formatting-only penalties)
+- Earlier: batch workflow files (`backend/src/api.py`, `frontend/src/api.ts`, `frontend/src/mmse/batch.ts`, etc.) — committed in `8cadbc5`.
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
-- Dev server boots cleanly (`vite`), serves HTTP 200; transformed `MMSEAssessment.tsx` HTTP 200.
-- Backend batch: 11 checks pass (AI disabled→503, empty batch→422, mixed valid/invalid→200 with `errors` map, empty-response error entry, unsupported section→422, bad key→422, all-provider-fail→503, mixed provider success+error, orientation_time server-side expected, fenced JSON accepted, score mismatch invalid). Live: `/predict` 200 (unchanged contract); `/mmse/evaluate` batch via mock Gemini provider → 200 `{items: {...}, errors: {}}`; unreachable provider → 503.
-- Frontend batch logic verified by Node harness (compiled `state.ts` + `batch.ts`): payload keys match expected items, no empty responses sent, response-completeness gating, `reviewRequired` from confidence, errored items stay unscored, onlyUnscored re-sends exactly the missing items, manual override wins, response edit clears the AI score, totals integer 0–30. Real provider AI correctness untested (no Ollama runtime).
+- Frontend batch logic verified by Node harness (compiled `state.ts` + `batch.ts`): location-unconfigured → no `orientation_place` items sent; location-configured → 5 place items sent with the examiner's values as `expected`; place response counts require location + response; `countAssessmentErrors` counts only `error` items; `applyBatchResultsToDraft` still applies place scores; totals remain integer 0–30. Real provider AI correctness untested (no Ollama runtime).
+- Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
 
 ### Commit
 - `590ff38` — `feat(mmse): add step-by-step MMSE assessment with examiner scoring`
@@ -451,10 +466,12 @@ alzheimers_ml_project/
 - `ccc45d3` — `fix(mmse): show contextual right panel during MMSE assessment phase`
 - `73ef09c` — `feat(mmse): record patient responses separately from examiner scoring`
 - `1235955` — `feat(mmse): add ai-assisted response scoring`
-- Pending: `refactor(mmse): batch AI assessment with a single evaluate request` (current uncommitted work)
+- `8cadbc5` — `refactor(mmse): batch AI assessment with a single evaluate request`
+- `e9478e7` — `docs: record batch AI assessment commit hash`
+- Pending: `fix(mmse): location-aware orientation to place, friendly errors, observation labels` (current uncommitted work)
 
 ### Push Status
-- Pushed to `origin/main` successfully through `1235955`. Current batch-AI work is uncommitted (see above); push after committing.
+- Pushed to `origin/main` successfully through `e9478e7`. Current MMSE UX-refinement work is uncommitted (see above); push after committing.
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.

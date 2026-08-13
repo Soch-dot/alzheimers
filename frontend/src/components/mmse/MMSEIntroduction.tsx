@@ -28,8 +28,11 @@ export const MMSEIntroduction: React.FC<MMSEIntroductionProps> = ({ onStart }) =
           maximum score of 30 points.
         </p>
         <p className="text-xs text-gray-500 mt-4 max-w-sm mx-auto">
-          The examiner asks the questions, observes the responses, and scores
-          each item. This is a screening tool — it is not a diagnosis.
+          The examiner asks the questions and records the patient&apos;s responses,
+          then scores everything with one AI-assisted assessment. A few
+          sections are observation-based and are recorded by the examiner — AI
+          vision assistance for those will be added in a later milestone. This
+          is a screening tool — it is not a diagnosis.
         </p>
 
         <motion.button

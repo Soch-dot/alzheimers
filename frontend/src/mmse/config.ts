@@ -43,21 +43,35 @@ export interface PlaceItemConfig {
   key: PlaceKey;
   label: string;
   prompt: string;
-  expected: string;
 }
 
 /**
- * CONFIGURABLE: correct answers for Orientation to Place depend on the
- * assessment location. Set `expected` for each item at the site where this
- * tool runs. Leave blank if the examiner should rely on their own knowledge;
- * the field is only shown as a hint.
+ * The five Orientation to Place questions. The reference answers are NOT
+ * hardcoded here — they are configured by the examiner at assessment time via
+ * the "Assessment location" form (see `LOCATION_FIELDS` below) and are used
+ * only as examiner/AI context during the batch evaluation. They are never shown
+ * to the patient.
  */
 export const PLACE_ITEMS: PlaceItemConfig[] = [
-  { key: 'state', label: 'State', prompt: 'What state are we in?', expected: '' },
-  { key: 'county', label: 'County', prompt: 'What county are we in?', expected: '' },
-  { key: 'town', label: 'Town / City', prompt: 'What town or city are we in?', expected: '' },
-  { key: 'building', label: 'Hospital / Building', prompt: 'What hospital or building are we in?', expected: '' },
-  { key: 'floor', label: 'Floor', prompt: 'What floor are we on?', expected: '' },
+  { key: 'state', label: 'State', prompt: 'What state are we in?' },
+  { key: 'county', label: 'County / District', prompt: 'What county or district are we in?' },
+  { key: 'town', label: 'Town / City', prompt: 'What town or city are we in?' },
+  { key: 'building', label: 'Hospital / Building', prompt: 'What hospital or building are we in?' },
+  { key: 'floor', label: 'Floor', prompt: 'What floor are we on?' },
+];
+
+/**
+ * CONFIGURABLE: the assessment-location form shown to the examiner at the top
+ * of the Orientation to Place section. The values entered here become the
+ * reference answers the AI uses for the five items. Patient-facing UI never
+ * shows these values.
+ */
+export const LOCATION_FIELDS: { key: PlaceKey; label: string; placeholder: string }[] = [
+  { key: 'state', label: 'State', placeholder: 'e.g. California' },
+  { key: 'county', label: 'County / District', placeholder: 'e.g. Los Angeles County' },
+  { key: 'town', label: 'Town / City', placeholder: 'e.g. San Francisco' },
+  { key: 'building', label: 'Hospital / Building', placeholder: 'e.g. General Hospital' },
+  { key: 'floor', label: 'Floor', placeholder: 'e.g. 2' },
 ];
 
 /**

@@ -5,6 +5,7 @@ import { sectionResponseCounts } from '../../mmse/batch';
 import {
   ATTENTION_TASKS,
   COPYING_REFERENCE_IMAGE,
+  LOCATION_FIELDS,
   NAMING_ITEMS,
   ORIENTATION_TIME_ITEMS,
   PLACE_ITEMS,
@@ -45,6 +46,7 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update, 
       maxScore={5}
       phase={phase}
       responseCount={counts.orientationTime.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Ask the patient the five questions below one at a time and record their
@@ -74,6 +76,10 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update, 
 
 export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update, phase, onRetry }) => {
   const counts = sectionResponseCounts(state);
+  const locationIncomplete = LOCATION_FIELDS.some(
+    (field) => state.location[field.key].trim() === ''
+  );
+
   return (
     <SectionShell
       title="Orientation to Place"
@@ -81,28 +87,69 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update,
       maxScore={5}
       phase={phase}
       responseCount={counts.orientationPlace.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
-          Ask the patient the five questions below. Correct answers depend on the
-          assessment location (set in{' '}
-          <code className="text-gray-400">src/mmse/config.ts</code>). Items with a
-          configured expected answer are scored by the AI in the batch; the rest are
-          scored manually. Expected answers stay hidden from the patient.
+          Set the assessment location, then ask the patient the five questions
+          below one at a time and record their actual responses. The reference
+          answers are set by the examiner below and are used by the AI during the
+          batch assessment — they are never shown to the patient.
         </ExaminerInstructions>
       }
     >
+      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5 space-y-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80">
+            Assessment location{' '}
+            <span className="normal-case tracking-normal text-gray-500">
+              — for the examiner, not the patient
+            </span>
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Enter where this assessment is taking place. These values are the
+            reference answers the AI uses to evaluate the patient&apos;s responses.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {LOCATION_FIELDS.map((field) => (
+            <div key={field.key}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">
+                {field.label}
+              </p>
+              <input
+                type="text"
+                value={state.location[field.key]}
+                onChange={(event) =>
+                  update((draft) => {
+                    draft.location[field.key] = event.target.value;
+                  })
+                }
+                placeholder={field.placeholder}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
+        {locationIncomplete && (
+          <p className="text-xs text-amber-300/80">
+            Finish setting the assessment location — all five fields are required
+            before the assessment can continue.
+          </p>
+        )}
+      </div>
+
       {PLACE_ITEMS.map((item) => {
         const placeItem = state.orientationPlace.items[item.key];
+        const configured = state.location[item.key].trim() !== '';
         return (
           <AIScoredResponse
             key={item.key}
             question={item.prompt}
-            hint={
-              item.expected
-                ? `Expected answer: ${item.expected}`
-                : 'Expected answer not configured for this location'
+            disabledNotice={
+              configured
+                ? undefined
+                : 'Set this field in the assessment location above to enable AI assessment.'
             }
-            aiEnabled={Boolean(item.expected)}
             item={placeItem}
             update={(patch) =>
               update((draft) => {
@@ -127,6 +174,7 @@ export const RegistrationSection: React.FC<SectionProps> = ({ state, update, pha
       maxScore={3}
       phase={phase}
       responseCount={counts.registration.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Say: &ldquo;I am going to name three objects. After I say them, I want you
@@ -281,6 +329,7 @@ export const AttentionSection: React.FC<SectionProps> = ({ state, update, phase,
       maxScore={5}
       phase={phase}
       responseCount={counts.attention.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Administer one of the two tasks below and record the patient&apos;s
@@ -360,6 +409,7 @@ export const DelayedRecallSection: React.FC<SectionProps> = ({ state, update, ph
       maxScore={3}
       phase={phase}
       responseCount={counts.delayedRecall.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Ask: &ldquo;Earlier I told you the names of three things. Can you tell
@@ -402,6 +452,7 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, on
       maxScore={2}
       phase={phase}
       responseCount={counts.naming.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Show each item to the patient and ask: &ldquo;What is this?&rdquo; Record the
@@ -446,6 +497,7 @@ export const RepetitionSection: React.FC<SectionProps> = ({ state, update, phase
       maxScore={1}
       phase={phase}
       responseCount={counts.repetition.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Say: &ldquo;I am going to say a phrase. Please repeat it exactly: No ifs,
@@ -483,12 +535,14 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update,
       maxScore={3}
       phase={phase}
       responseCount={counts.command.done}
+      kind="observation"
       instructions={
         <ExaminerInstructions>
           Give the patient a blank piece of paper, then say: &ldquo;Take the paper in
-          your right hand, fold it in half, and put it on the floor.&rdquo; This is a
-          physical/visual observation task, so it is scored by the examiner — not
-          by the AI. Score each action independently.
+          your right hand, fold it in half, and put it on the floor.&rdquo; This is an
+          observation-based assessment — record each action you observe. AI vision
+          assistance for physical-task observation will be added in a later
+          milestone.
         </ExaminerInstructions>
       }
     >
@@ -550,11 +604,13 @@ export const ReadingSection: React.FC<SectionProps> = ({ state, update, phase })
       maxScore={1}
       phase={phase}
       responseCount={counts.reading.done}
+      kind="observation"
       instructions={
         <ExaminerInstructions>
           Show the instruction card below to the patient. Do NOT read it aloud.
-          Automated vision scoring is not implemented yet, so the examiner records
-          this observation manually.
+          This is an observation-based assessment — record whether the patient
+          reads and performs the instruction. AI vision assistance will be added
+          in a later milestone.
         </ExaminerInstructions>
       }
     >
@@ -609,6 +665,7 @@ export const WritingSection: React.FC<SectionProps> = ({ state, update, phase, o
       maxScore={1}
       phase={phase}
       responseCount={counts.writing.done}
+      kind="ai"
       instructions={
         <ExaminerInstructions>
           Ask: &ldquo;{WRITING_PROMPT}&rdquo; The only scoring criterion is that the
@@ -645,11 +702,12 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
       maxScore={1}
       phase={phase}
       responseCount={counts.copying.done}
+      kind="observation"
       instructions={
         <ExaminerInstructions>
           Show the reference figure to the patient and ask them to copy it as
-          exactly as possible. Automated vision scoring is not implemented yet —
-          the examiner judges the copy manually.
+          exactly as possible. This is an observation-based assessment — judge the
+          copy manually. AI vision assistance will be added in a later milestone.
         </ExaminerInstructions>
       }
     >
@@ -665,12 +723,10 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
           <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center">
             <p className="text-sm text-gray-400">
               The reference figure from the MMSE questionnaire is not bundled with
-              this project.
+              this version.
             </p>
             <p className="text-sm text-gray-400 mt-2">
-              Supply the exact figure as an image asset and set its path in{' '}
-              <code className="text-gray-300">src/mmse/config.ts</code>
-              (COPYING_REFERENCE_IMAGE).
+              It will be added in a later milestone.
             </p>
           </div>
         )}

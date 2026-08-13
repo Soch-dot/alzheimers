@@ -43,6 +43,20 @@ export interface OrientationTimeState {
 
 export type PlaceKey = 'state' | 'county' | 'town' | 'building' | 'floor';
 
+/**
+ * The assessment location, configured by the examiner before/while running the
+ * Orientation to Place section. These values are the reference answers used by
+ * the AI during the batch evaluation. They are examiner/AI context only and are
+ * never shown to the patient.
+ */
+export interface AssessmentLocation {
+  state: string;
+  county: string;
+  town: string;
+  building: string;
+  floor: string;
+}
+
 export interface OrientationPlaceState {
   items: Record<PlaceKey, ItemState>;
 }
@@ -85,6 +99,7 @@ export interface ReadingState {
 }
 
 export interface MMSEState {
+  location: AssessmentLocation;
   orientationTime: OrientationTimeState;
   orientationPlace: OrientationPlaceState;
   registration: RegistrationState;
@@ -123,8 +138,13 @@ function blank(): ItemState {
   };
 }
 
+function blankLocation(): AssessmentLocation {
+  return { state: '', county: '', town: '', building: '', floor: '' };
+}
+
 export function createInitialMMSEState(): MMSEState {
   return {
+    location: blankLocation(),
     orientationTime: {
       items: {
         year: blank(),

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import type { MMSEScores, MmsePhase, SectionId } from '../../mmse/state';
 import type { SectionResponseCount } from '../../mmse/batch';
+import type { BatchErrorInfo } from './MMSEAssessment';
 import { GlassCard } from './primitives';
 
 interface MMSESummaryProps {
@@ -9,9 +10,11 @@ interface MMSESummaryProps {
   total: number;
   scores: MMSEScores;
   responseCounts: Record<SectionId, SectionResponseCount>;
-  batchError: string | null;
+  batchError: BatchErrorInfo | null;
   /** AI-scored items that still need (re)assessment. */
   needsReassessCount: number;
+  /** Items that were sent to the batch but returned an error (no score). */
+  errorItemCount: number;
   allFinalized: boolean;
   onAssess: () => void;
   onReview: () => void;
@@ -47,6 +50,7 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
   responseCounts,
   batchError,
   needsReassessCount,
+  errorItemCount,
   allFinalized,
   onAssess,
   onReview,
@@ -158,9 +162,21 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
         <GlassCard>
           <div className="text-center mb-8">
             <p className="text-lg font-semibold text-amber-300 tracking-tight">
-              AI assessment unavailable.
+              {batchError?.title ?? 'AI assessment unavailable'}
             </p>
-            {batchError && <p className="text-xs text-gray-400 mt-2">{batchError}</p>}
+            {batchError?.subtitle && (
+              <p className="text-sm text-gray-400 mt-2">{batchError.subtitle}</p>
+            )}
+            {batchError?.detail && (
+              <details className="mt-4 text-left max-w-md mx-auto">
+                <summary className="cursor-pointer text-xs text-gray-500 hover:text-white transition-colors">
+                  View technical details
+                </summary>
+                <pre className="mt-2 text-[11px] leading-relaxed text-gray-600 whitespace-pre-wrap break-words max-h-40 overflow-auto rounded-lg bg-white/[0.03] p-3">
+                  {batchError.detail}
+                </pre>
+              </details>
+            )}
             <p className="text-sm text-gray-400 font-light mt-3">
               No score was assigned. You can retry, or score the items manually in
               each section and continue.
@@ -179,6 +195,17 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
 
   // assessed
   if (!allFinalized) {
+    const hasErrors = errorItemCount > 0;
+    const title = hasErrors
+      ? 'Some responses could not be assessed.'
+      : needsReassessCount > 0
+        ? 'Some responses need (re)assessment'
+        : 'Review the flagged items to finish';
+    const subtitle = hasErrors
+      ? 'One or more responses did not return a valid assessment. Review the affected items, then retry the assessment or score them manually.'
+      : needsReassessCount > 0
+        ? 'Some responses changed or were not scored. Run the AI assessment again, or score them manually.'
+        : 'Low-confidence AI results must be accepted or overridden before continuing.';
     return (
       <motion.div
         initial={{ opacity: 0, x: 24 }}
@@ -188,15 +215,9 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
         <GlassCard>
           <div className="text-center mb-8">
             <p className="text-lg font-semibold text-amber-300 tracking-tight">
-              {needsReassessCount > 0
-                ? `${needsReassessCount} item(s) need (re)assessment`
-                : 'Review the flagged items to finish'}
+              {title}
             </p>
-            <p className="text-sm text-gray-400 font-light mt-2">
-              {needsReassessCount > 0
-                ? 'Some responses changed or were not scored. Run the AI assessment again, or score them manually.'
-                : 'Low-confidence AI results and any missing items must be accepted or overridden before continuing.'}
-            </p>
+            <p className="text-sm text-gray-400 font-light mt-2">{subtitle}</p>
           </div>
           <div className="flex flex-col gap-3">
             {needsReassessCount > 0 && (

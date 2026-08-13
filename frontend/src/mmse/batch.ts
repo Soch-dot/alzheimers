@@ -44,8 +44,9 @@ export function buildBatchItems(
   );
 
   PLACE_ITEMS.forEach((it) => {
-    if (!it.expected) return; // manual-only when expected not configured
-    add(`orientation_place.${it.key}`, it.prompt, state.orientationPlace.items[it.key], it.expected);
+    const expected = state.location[it.key].trim();
+    if (!expected) return; // location not configured for this item -> not AI-evaluated
+    add(`orientation_place.${it.key}`, it.prompt, state.orientationPlace.items[it.key], expected);
   });
 
   state.registration.items.forEach((item, i) =>
@@ -153,10 +154,10 @@ export function sectionResponseCounts(
 
   const counts: Record<SectionId, number> = {
     orientationTime: Object.values(state.orientationTime.items).filter(nonEmpty).length,
-    orientationPlace: PLACE_ITEMS.filter((it) =>
-      it.expected
-        ? nonEmpty(state.orientationPlace.items[it.key])
-        : state.orientationPlace.items[it.key].manual !== null
+    orientationPlace: PLACE_ITEMS.filter(
+      (it) =>
+        state.location[it.key].trim() !== '' &&
+        nonEmpty(state.orientationPlace.items[it.key])
     ).length,
     registration: state.registration.items.filter(nonEmpty).length,
     attention:
@@ -201,4 +202,26 @@ export function sectionResponseCounts(
 export function isSectionResponseComplete(id: SectionId, state: MMSEState): boolean {
   const count = sectionResponseCounts(state)[id];
   return count.done >= count.max;
+}
+
+/** Every AI-scored item across the questionnaire (response + score state). */
+export function collectAiItems(state: MMSEState): ItemState[] {
+  return [
+    ...Object.values(state.orientationTime.items),
+    ...Object.values(state.orientationPlace.items),
+    ...state.registration.items,
+    ...(state.attention.task === 'serial7'
+      ? state.attention.serial7
+      : state.attention.spellWorld.letters),
+    ...state.delayedRecall.items,
+    state.naming.watch,
+    state.naming.pencil,
+    state.repetition,
+    state.writing,
+  ];
+}
+
+/** Items that were sent to the batch but came back with an error (no score). */
+export function countAssessmentErrors(state: MMSEState): number {
+  return collectAiItems(state).filter((item) => item.status === 'error').length;
 }
