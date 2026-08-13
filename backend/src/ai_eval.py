@@ -3,6 +3,15 @@ AI-assisted MMSE response evaluation service (research prototype).
 
 Layering:  React frontend  ->  this FastAPI service  ->  AI provider.
 
+BATCH workflow (NOT per-question):
+  The frontend collects ALL patient responses first (no AI calls while the
+  patient is answering). The examiner then triggers ONE explicit "Assess MMSE
+  with AI" action, which sends a single POST /mmse/evaluate containing every
+  collected response. The backend evaluates each applicable item and returns
+  per-item structured results. Internally this service may make multiple model
+  evaluations (each item needs its own question-specific prompt), but the
+  frontend always behaves as one assessment operation.
+
 Provider selection (env var `AI_PROVIDER`):
   - "ollama"  (default, local): Ollama via its HTTP API, e.g. Gemma 3.
   - "gemini"  (cloud): Gemini through its OpenAI-compatible API.
@@ -17,7 +26,8 @@ Security/scope rules:
   - The AI result is an assist signal, NOT a diagnosis and NOT clinically
     validated. The examiner always has override/manual-review control.
   - No patient responses are logged or persisted by this service.
-  - Only stdlib is used here (urllib) to avoid new dependencies.
+  - Only stdlib is used here (urllib + concurrent.futures) to avoid new
+    dependencies.
 
 Each MMSE section defines its own evaluation prompt and rules.
 """
@@ -27,6 +37,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
@@ -61,14 +72,24 @@ AI_SECTIONS = {
 }
 
 
-class MMSEEvaluateRequest(BaseModel):
-    """One MMSE item to be scored by the AI service."""
+class MMSEBatchItem(BaseModel):
+    """One MMSE item inside a batch request."""
 
-    section: str
-    item_key: str
     question: str = ""
     response: str = ""
     expected: str = ""
+
+
+class MMSEEvaluateRequest(BaseModel):
+    """
+    All collected AI-scored MMSE responses in one request.
+
+    Each key is "<section>.<item_key>", e.g. "orientation_time.year" or
+    "attention_spell_world.3". `expected` carries the examiner-only evaluation
+    context (empty where the answer is derived server-side, e.g. time items).
+    """
+
+    items: dict[str, MMSEBatchItem] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -187,11 +208,13 @@ def _prompt_for(section: str, item_key: str, question: str, response: str, expec
     )
 
 
-def build_messages(req: MMSEEvaluateRequest) -> list:
+def build_messages(
+    section: str, item_key: str, question: str, response: str, expected: str
+) -> list:
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _prompt_for(
-            req.section, req.item_key, req.question, req.response, req.expected
+            section, item_key, question, response, expected
         )},
     ]
 
@@ -332,31 +355,81 @@ def parse_ai_result(content: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Public entry point used by api.py
+# Public entry point used by api.py (batch evaluation)
 # ---------------------------------------------------------------------------
-def evaluate_mmse_item(req: MMSEEvaluateRequest) -> dict:
+class _ItemFailure:
+    """Per-item failure. kind: "provider" (AI unreachable) or "invalid" (bad output)."""
+
+    __slots__ = ("kind", "message")
+
+    def __init__(self, kind: str, message: str) -> None:
+        self.kind = kind
+        self.message = message
+
+
+def _evaluate_single(key: str, entry: MMSEBatchItem):
+    """Evaluate one item. Returns a validated result dict or an _ItemFailure."""
+    section, sep, item_key = key.partition(".")
+    if not sep or not item_key:
+        return _ItemFailure("invalid", f"Invalid item key: {key!r}")
+    if section not in AI_SECTIONS:
+        return _ItemFailure(
+            "invalid", f"Unsupported MMSE section for AI evaluation: {section}"
+        )
+    if not entry.response.strip():
+        return _ItemFailure("invalid", f"Empty response for {key} cannot be evaluated")
+
+    messages = build_messages(
+        section, item_key, entry.question, entry.response, entry.expected
+    )
+    try:
+        content = call_provider(messages)
+        return parse_ai_result(content)
+    except AIProviderError as exc:
+        return _ItemFailure("provider", str(exc))
+    except ValueError as exc:
+        return _ItemFailure("invalid", str(exc))
+
+
+def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
+    """
+    Evaluate a batch of MMSE responses.
+
+    Returns {"items": {key: result}, "errors": {key: message}}. Raises:
+      503 when AI is disabled or the provider is unreachable for every item;
+      422 when the request itself is malformed (no items supplied).
+    """
     if AI_PROVIDER == "none":
         raise HTTPException(
             status_code=503,
             detail="AI assessment is not configured (AI_PROVIDER=none).",
         )
-    if req.section not in AI_SECTIONS:
+    if not req.items:
+        raise HTTPException(status_code=422, detail="No MMSE items to evaluate.")
+
+    keys = list(req.items.keys())
+    results: dict = {}
+    errors: dict = {}
+    provider_failures = 0
+
+    workers = min(len(keys), 8)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_evaluate_single, key, req.items[key]): key for key in keys
+        }
+        for future in as_completed(futures):
+            key = futures[future]
+            outcome = future.result()
+            if isinstance(outcome, dict):
+                results[key] = outcome
+            else:
+                errors[key] = outcome.message
+                if outcome.kind == "provider":
+                    provider_failures += 1
+
+    if not results and errors and provider_failures == len(errors):
         raise HTTPException(
-            status_code=422,
-            detail=f"Unsupported MMSE section for AI evaluation: {req.section}",
+            status_code=503, detail=f"AI assessment unavailable: {next(iter(errors.values()))}"
         )
 
-    messages = build_messages(req)
-    try:
-        content = call_provider(messages)
-    except AIProviderError as exc:
-        raise HTTPException(
-            status_code=503, detail=f"AI assessment unavailable: {exc}"
-        ) from exc
-
-    try:
-        return parse_ai_result(content)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=422, detail=f"Invalid AI response (no score assigned): {exc}"
-        ) from exc
+    return {"items": results, "errors": errors}

@@ -1,9 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { ItemState, ScoreMark } from '../../mmse/state';
+import type { ItemState, MmsePhase, ScoreMark } from '../../mmse/state';
 import { effectiveCorrect } from '../../mmse/state';
-import { AI_CONFIDENCE_REVIEW_THRESHOLD } from '../../mmse/config';
-import { evaluateMmseItem, extractApiError } from '../../api';
 
 interface GlassCardProps {
   children: React.ReactNode;
@@ -52,7 +50,7 @@ interface PatientResponseProps {
   rightSlot?: React.ReactNode;
 }
 
-/** Records the patient's actual response. Never auto-scores the text. */
+/** Records the patient's actual response. Never auto-scores or auto-evaluates the text. */
 export const PatientResponse: React.FC<PatientResponseProps> = ({
   value,
   onChange,
@@ -95,6 +93,9 @@ export const PatientResponse: React.FC<PatientResponseProps> = ({
 // ---------------------------------------------------------------------------
 // Speech capture (Web Speech API, no new dependency). Graceful degradation:
 // when unsupported, the examiner types the response instead.
+// IMPORTANT: a transcript only populates the response field. It never triggers
+// AI evaluation — assessment starts only from the explicit "Assess MMSE with
+// AI" batch action.
 // ---------------------------------------------------------------------------
 type SpeechRecognitionLike = {
   lang: string;
@@ -161,7 +162,7 @@ export function useSpeechRecognition(onFinalTranscript: (text: string) => void) 
 }
 
 // ---------------------------------------------------------------------------
-// Examiner scoring (manual sections / manual review)
+// Examiner scoring (manual sections / manual review / override)
 // ---------------------------------------------------------------------------
 interface ExaminerScoringProps {
   label?: string;
@@ -229,26 +230,26 @@ export const ExaminerScoring: React.FC<ExaminerScoringProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// AI assessment result panel (shared by scored items and spelling letter rows)
+// AI result panel (shown AFTER the batch assessment; never during response
+// collection). No per-item "Assessing…" state exists anymore — the batch has
+// one global loading state.
 // ---------------------------------------------------------------------------
-const primaryButtonClass =
-  'px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed';
-
 const ghostButtonClass =
   'px-4 py-1.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10';
 
-interface AIAssessmentPanelProps {
+interface AIResultPanelProps {
   item: ItemState;
   update: (patch: Partial<ItemState>) => void;
-  onAssess: () => void;
-  idleEmptyHint?: string;
+  /** Re-run the batch for still-unscored items. */
+  onRetry?: () => void;
+  notAssessedHint?: string;
 }
 
-export const AIAssessmentPanel: React.FC<AIAssessmentPanelProps> = ({
+export const AIResultPanel: React.FC<AIResultPanelProps> = ({
   item,
   update,
-  onAssess,
-  idleEmptyHint = "Enter the patient's response, then assess.",
+  onRetry,
+  notAssessedHint = 'Not assessed by AI yet.',
 }) => {
   const [showManual, setShowManual] = useState(false);
   const effective = effectiveCorrect(item);
@@ -281,44 +282,20 @@ export const AIAssessmentPanel: React.FC<AIAssessmentPanelProps> = ({
     </div>
   );
 
-  if (item.status === 'idle') {
-    if (!item.response.trim()) {
-      return <p className="text-xs text-gray-500">{idleEmptyHint}</p>;
-    }
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-gray-500">Patient response captured</p>
-        <button type="button" onClick={onAssess} className={primaryButtonClass}>
-          Assess with AI
-        </button>
-      </div>
-    );
-  }
-
-  if (item.status === 'assessing') {
-    return (
-      <div className="flex items-center gap-3">
-        <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-gray-400">Assessing response…</p>
-      </div>
-    );
-  }
-
-  if (item.status === 'error') {
+  // Not yet assessed (or the item failed and has no score).
+  if (!item.aiScore) {
     return (
       <div>
-        <p className="text-sm font-semibold text-amber-300">AI assessment unavailable.</p>
-        {item.error && <p className="text-xs text-gray-400 mt-1">{item.error}</p>}
+        <p className="text-xs text-gray-500">{notAssessedHint}</p>
+        {item.error && <p className="text-xs text-amber-300 mt-1">{item.error}</p>}
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          <button type="button" onClick={onAssess} className={ghostButtonClass}>
-            Retry
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowManual((v) => !v)}
-            className={ghostButtonClass}
-          >
-            Manual review
+          {onRetry && item.manual === null && (
+            <button type="button" onClick={onRetry} className={ghostButtonClass}>
+              Retry
+            </button>
+          )}
+          <button type="button" onClick={() => setShowManual((v) => !v)} className={ghostButtonClass}>
+            Score manually
           </button>
         </div>
         {showManual && manualControls}
@@ -327,13 +304,11 @@ export const AIAssessmentPanel: React.FC<AIAssessmentPanelProps> = ({
   }
 
   const ai = item.aiScore;
-  if (!ai) return null;
-
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`text-sm font-semibold ${ai.correct ? 'text-emerald-300' : 'text-rose-300'}`}>
-          {ai.correct ? '✓ Correct' : '✗ Incorrect'}
+          {ai.correct ? '✓ Likely correct' : '✕ Likely incorrect'}
         </span>
         {item.reviewRequired && !item.reviewed && (
           <span className="text-xs font-semibold text-amber-300">⚠ Review required</span>
@@ -387,14 +362,14 @@ export const AIAssessmentPanel: React.FC<AIAssessmentPanelProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// AI-scored item card: question → patient response → AI assessment → score
+// AI-scored item card.
+// Phase 'collect'      : question → patient response (typed or speech) →
+//                        "Response recorded". No AI, no scores, no confidence.
+// Phase 'assessed/error': question → response → AI result panel.
 // ---------------------------------------------------------------------------
 interface AIScoredResponseProps {
-  section: string;
-  itemKey: string;
   question: string;
   hint?: string;
-  expected: string;
   /** When false (e.g. expected answer not configured), the item is manual-only. */
   aiEnabled?: boolean;
   item: ItemState;
@@ -403,14 +378,13 @@ interface AIScoredResponseProps {
   placeholder?: string;
   multiline?: boolean;
   top?: React.ReactNode;
+  phase: MmsePhase;
+  onRetry?: () => void;
 }
 
 export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
-  section,
-  itemKey,
   question,
   hint,
-  expected,
   aiEnabled = true,
   item,
   update,
@@ -418,9 +392,9 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
   placeholder = "Patient's response",
   multiline = false,
   top,
+  phase,
+  onRetry,
 }) => {
-  const busyRef = useRef(false);
-
   const onResponseChange = (value: string) => {
     if (value === item.response) return;
     update({
@@ -434,56 +408,10 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
     });
   };
 
-  const assess = useCallback(
-    async (text: string) => {
-      if (busyRef.current) return;
-      if (!text.trim()) return;
-      busyRef.current = true;
-      update({ status: 'assessing', error: null });
-      try {
-        const result = await evaluateMmseItem({
-          section,
-          item_key: itemKey,
-          question,
-          response: text,
-          expected,
-        });
-        busyRef.current = false;
-        update({
-          status: 'assessed',
-          aiScore: {
-            correct: result.correct,
-            confidence: result.confidence,
-            reason: result.reason,
-          },
-          reviewRequired: result.confidence < AI_CONFIDENCE_REVIEW_THRESHOLD,
-          reviewed: false,
-          error: null,
-        });
-      } catch (err) {
-        busyRef.current = false;
-        update({ status: 'error', error: extractApiError(err) });
-      }
-    },
-    [section, itemKey, question, expected, update]
-  );
-
   const speechHook = useSpeechRecognition((transcript) => {
     onResponseChange(transcript);
-    window.setTimeout(() => {
-      void assess(transcript);
-    }, 0);
   });
   const { supported: speechSupported, listening, error: speechError, start, stop } = speechHook;
-
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter' && !multiline && !event.shiftKey) {
-      event.preventDefault();
-      if (item.response.trim() && item.status !== 'assessing') {
-        void assess(item.response);
-      }
-    }
-  };
 
   const micButton = (
     <button
@@ -506,7 +434,6 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
         onChange={onResponseChange}
         placeholder={placeholder}
         multiline={multiline}
-        onKeyDown={handleKeyDown}
         rightSlot={speech && speechSupported && !multiline ? micButton : undefined}
       />
       {speech && !multiline && !speechSupported && (
@@ -548,13 +475,23 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
         {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
       </div>
       {responseField}
-      <div className="pt-4 border-t border-white/10">
-        <AIAssessmentPanel
-          item={item}
-          update={update}
-          onAssess={() => void assess(item.response)}
-        />
-      </div>
+      {phase === 'collect' ? (
+        item.response.trim() ? (
+          <div className="pt-3 border-t border-white/10 flex items-center gap-2">
+            <span className="text-emerald-300">✓</span>
+            <p className="text-xs text-gray-400">Response recorded</p>
+          </div>
+        ) : null
+      ) : (
+        <div className="pt-4 border-t border-white/10">
+          <AIResultPanel
+            item={item}
+            update={update}
+            onRetry={onRetry}
+            notAssessedHint="Not assessed by AI yet."
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -565,6 +502,8 @@ interface SectionShellProps {
   maxScore: number;
   instructions?: React.ReactNode;
   children: React.ReactNode;
+  phase: MmsePhase;
+  responseCount?: number;
 }
 
 export const SectionShell: React.FC<SectionShellProps> = ({
@@ -573,6 +512,8 @@ export const SectionShell: React.FC<SectionShellProps> = ({
   maxScore,
   instructions,
   children,
+  phase,
+  responseCount = 0,
 }) => {
   return (
     <motion.div
@@ -583,9 +524,15 @@ export const SectionShell: React.FC<SectionShellProps> = ({
       <GlassCard>
         <div className="flex items-start justify-between gap-4 mb-6">
           <h3 className="text-xl md:text-2xl font-semibold text-white tracking-tight">{title}</h3>
-          <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
-            {score} <span className="text-gray-500">/ {maxScore}</span>
-          </span>
+          {phase === 'collect' ? (
+            <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+              {responseCount} <span className="text-gray-500">/ {maxScore} responses</span>
+            </span>
+          ) : (
+            <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+              {score} <span className="text-gray-500">/ {maxScore}</span>
+            </span>
+          )}
         </div>
         {instructions && <div className="mb-6">{instructions}</div>}
         <div className="space-y-3">{children}</div>

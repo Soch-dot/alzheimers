@@ -38,32 +38,43 @@ export const predictAlzheimers = async (data: PatientInput): Promise<PredictionR
 };
 
 // ---------------------------------------------------------------------------
-// AI-assisted MMSE item evaluation (separate service; /predict contract unchanged)
+// AI-assisted MMSE batch evaluation (separate service; /predict contract unchanged)
+// The frontend sends ALL collected responses in ONE request when the examiner
+// clicks "Assess MMSE with AI". Keys are "<section>.<item_key>".
 // ---------------------------------------------------------------------------
-export interface MmseEvaluateRequest {
-  section: string;
-  item_key: string;
+export interface MmseBatchItem {
   question: string;
   response: string;
   expected: string;
 }
 
-export interface MmseEvaluateResult {
+export interface MmseBatchItemResult {
   correct: boolean;
   score: number;
   confidence: number;
   reason: string;
 }
 
-export const evaluateMmseItem = async (
-  data: MmseEvaluateRequest
-): Promise<MmseEvaluateResult> => {
-  const response = await axios.post<MmseEvaluateResult>(
+export interface MmseBatchResponse {
+  items: Record<string, MmseBatchItemResult>;
+  errors?: Record<string, string>;
+}
+
+export const evaluateMmseBatch = async (
+  items: Record<string, MmseBatchItem>,
+  timeoutMs = 90000
+): Promise<MmseBatchResponse> => {
+  const response = await axios.post<MmseBatchResponse>(
     `${API_BASE_URL}/mmse/evaluate`,
-    data
+    { items },
+    { timeout: timeoutMs }
   );
   return response.data;
 };
+
+export function isTimeoutError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.code === 'ECONNABORTED';
+}
 
 export function extractApiError(err: unknown): string {
   if (axios.isAxiosError(err)) {

@@ -2,6 +2,15 @@ export type ScoreMark = boolean | null;
 
 export type AssessmentStatus = 'idle' | 'assessing' | 'assessed' | 'error';
 
+/**
+ * Two-phase assessment workflow.
+ * - 'collect'   : patient/examiner records responses only; NO AI calls happen.
+ * - 'assessing' : one explicit batch assessment is in flight.
+ * - 'assessed'  : batch results received and applied per item.
+ * - 'error'     : the batch request failed (provider down / timeout / invalid).
+ */
+export type MmsePhase = 'collect' | 'assessing' | 'assessed' | 'error';
+
 export interface AIScore {
   correct: boolean;
   confidence: number;
