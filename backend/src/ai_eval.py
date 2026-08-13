@@ -7,31 +7,36 @@ BATCH workflow (NOT per-question):
   The frontend collects ALL patient responses first (no AI calls while the
   patient is answering). The examiner then triggers ONE explicit "Assess MMSE
   with AI" action, which sends a single POST /mmse/evaluate containing every
-  collected response. The backend evaluates each applicable item and returns
-  per-item structured results. Internally this service may make multiple model
-  evaluations (each item needs its own question-specific prompt), but the
-  frontend always behaves as one assessment operation.
+  collected response. The backend evaluates all applicable items and returns
+  per-item structured results. The frontend always behaves as one assessment
+  operation.
 
 Provider selection (env var `AI_PROVIDER`):
   - "ollama"  (default, local): Ollama via its HTTP API, e.g. Gemma 3.
   - "gemini"  (cloud): Gemini through its OpenAI-compatible API.
   - "none"    : AI disabled; POST /mmse/evaluate returns 503.
 
+Batching strategy is provider-aware:
+  - OLLAMA: the whole batch is sent as ONE `/api/chat` call with a single
+    prompt containing every AI-evaluable item and its section-specific rules.
+    The model returns a single JSON object with one entry per item. This avoids
+    30 sequential local generations on a single GPU/CPU (the previous
+    bottleneck). No per-item Ollama requests and no concurrent Ollama requests.
+  - GEMINI: keeps the previous per-item parallel evaluation for now, but the
+    provider abstraction is structured so a single batched call can be added
+    later without touching the caller.
+
 Provider config comes from the environment (optionally a backend .env):
   AI_PROVIDER, OLLAMA_BASE_URL, OLLAMA_MODEL, GEMINI_BASE_URL,
-  GEMINI_API_KEY, GEMINI_MODEL, AI_TIMEOUT,
+  GEMINI_API_KEY, GEMINI_MODEL, AI_TIMEOUT, OLLAMA_BATCH_TIMEOUT,
   OLLAMA_MAX_CONCURRENCY, GEMINI_MAX_CONCURRENCY.
-
-Concurrency is provider-aware: local Ollama runs on a single GPU/CPU so the
-batch is evaluated SEQUENTIALLY by default (OLLAMA_MAX_CONCURRENCY=1) to avoid
-GPU/CPU contention and model-load churn. Cloud providers may evaluate items in
-parallel (GEMINI_MAX_CONCURRENCY=8). The browser always sends ONE batch request
-either way.
 
 Security/scope rules:
   - API keys exist ONLY on the backend. They are never shipped to React.
   - The AI result is an assist signal, NOT a diagnosis and NOT clinically
     validated. The examiner always has override/manual-review control.
+  - Reference/expected answers are backend-only (used inside prompts for the
+    model). They are never shown to the patient or shipped to React.
   - No patient responses are logged or persisted by this service.
   - Only stdlib is used here (urllib + concurrent.futures) to avoid new
     dependencies.
@@ -42,6 +47,7 @@ Each MMSE section defines its own evaluation prompt and rules.
 from datetime import datetime
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -65,6 +71,10 @@ GEMINI_BASE_URL = os.getenv(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "30"))
+# The single Ollama batch call must fit inside the frontend's batch timeout
+# (180 s) with margin; it is separate from the per-item AI_TIMEOUT used by the
+# Gemini path.
+OLLAMA_BATCH_TIMEOUT = float(os.getenv("OLLAMA_BATCH_TIMEOUT", "175"))
 OLLAMA_MAX_CONCURRENCY = max(1, int(os.getenv("OLLAMA_MAX_CONCURRENCY", "1")))
 GEMINI_MAX_CONCURRENCY = max(1, int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
@@ -119,6 +129,27 @@ SYSTEM_PROMPT = (
     '"reason": short string}. score must be 1 when correct is true and 0 when '
     "correct is false. Set confidence below 0.7 whenever you are genuinely "
     "uncertain. Do not include any text outside the JSON object."
+)
+
+
+BATCH_SYSTEM_PROMPT = (
+    "You are an assistant that evaluates responses from the Mini-Mental State "
+    "Examination (MMSE), a cognitive screening instrument. You are NOT making a "
+    "diagnosis and you have no clinical authority. You will be given several "
+    "MMSE items; judge each one independently on whether the patient's response "
+    "matches its expected answer. Evaluate the MEANING of each response, not its "
+    "formatting: do NOT mark a response incorrect solely because of differences "
+    "in capitalization, punctuation, spacing, a number written in words instead "
+    "of digits (e.g. '2026' and 'twenty twenty-six'), or a harmless synonym. "
+    "Mark an item incorrect only when the response does not actually satisfy "
+    "the question. "
+    'Respond with ONLY a single JSON object matching exactly this schema: '
+    '{"items": { "<item_key>": {"correct": boolean, "score": 0 or 1, '
+    '"confidence": number between 0 and 1, "reason": short string} } }. '
+    "Include an entry for EVERY item key listed below. score must be 1 when "
+    "correct is true and 0 when correct is false. Set confidence below 0.7 "
+    "whenever you are genuinely uncertain. Keep every reason short (a few "
+    "words). Do not include any text outside the JSON object."
 )
 
 
@@ -233,6 +264,31 @@ def build_messages(
     ]
 
 
+def build_batch_messages(items: "dict[str, MMSEBatchItem]") -> list:
+    """
+    Build ONE message pair evaluating all items in a single model call.
+
+    Each item keeps its section-specific rules (from `_prompt_for`), so the
+    single call preserves the same question-specific semantics as per-item
+    evaluation while generating all results in one forward pass.
+    """
+    lines = []
+    for key, entry in items.items():
+        section, sep, item_key = key.partition(".")
+        rule = _prompt_for(
+            section, item_key, entry.question, entry.response, entry.expected
+        )
+        lines.append(f"[{key}]\n{rule}")
+    user_content = (
+        "Evaluate each of the following MMSE items and return one JSON entry "
+        "per item key:\n\n" + "\n\n".join(lines)
+    )
+    return [
+        {"role": "system", "content": BATCH_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Provider callers (stdlib only)
 # ---------------------------------------------------------------------------
@@ -240,12 +296,13 @@ class AIProviderError(Exception):
     pass
 
 
-def _post_json(url: str, payload: dict, headers: dict) -> str:
+def _post_json(url: str, payload: dict, headers: dict, timeout: float | None = None) -> str:
     data = json.dumps(payload).encode("utf-8")
     hdrs = {"Content-Type": "application/json", **headers}
     request = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    effective_timeout = AI_TIMEOUT if timeout is None else timeout
     try:
-        with urllib.request.urlopen(request, timeout=AI_TIMEOUT) as resp:
+        with urllib.request.urlopen(request, timeout=effective_timeout) as resp:
             body = resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = ""
@@ -261,7 +318,7 @@ def _post_json(url: str, payload: dict, headers: dict) -> str:
     return body
 
 
-def _call_ollama(messages: list) -> str:
+def _call_ollama(messages: list, timeout: float | None = None) -> str:
     payload = {
         "model": OLLAMA_MODEL,
         "messages": messages,
@@ -269,7 +326,7 @@ def _call_ollama(messages: list) -> str:
         "format": "json",
         "options": {"temperature": 0.0},
     }
-    body = _post_json(f"{OLLAMA_BASE_URL}/api/chat", payload, {})
+    body = _post_json(f"{OLLAMA_BASE_URL}/api/chat", payload, {}, timeout=timeout)
     try:
         data = json.loads(body)
     except json.JSONDecodeError as exc:
@@ -315,9 +372,9 @@ def call_provider(messages: list) -> str:
 # ---------------------------------------------------------------------------
 # Structured-output validation
 # ---------------------------------------------------------------------------
-def parse_ai_result(content: str) -> dict:
-    """Validate the model's JSON output. Raise ValueError on anything invalid."""
-    text = content.strip()
+def _parse_json_object(text: str) -> dict:
+    """Best-effort parse of the model's JSON output. Raise ValueError on failure."""
+    text = text.strip()
     if text.startswith("```"):
         lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
         text = "\n".join(lines).strip()
@@ -329,16 +386,19 @@ def parse_ai_result(content: str) -> dict:
         return data
 
     try:
-        data = _load(text)
+        return _load(text)
     except (json.JSONDecodeError, ValueError):
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:
             raise ValueError("model did not return valid JSON")
         try:
-            data = _load(text[start : end + 1])
+            return _load(text[start : end + 1])
         except (json.JSONDecodeError, ValueError) as exc:
             raise ValueError("model did not return valid JSON") from exc
 
+
+def _validate_item(data: dict) -> dict:
+    """Validate one item result dict. Raise ValueError on anything invalid."""
     correct = data.get("correct")
     if not isinstance(correct, bool):
         raise ValueError("'correct' must be a boolean")
@@ -366,6 +426,49 @@ def parse_ai_result(content: str) -> dict:
         "confidence": round(confidence, 4),
         "reason": reason.strip()[:500],
     }
+
+
+def parse_ai_result(content: str) -> dict:
+    """Validate the model's per-item JSON output. Raise ValueError on anything invalid."""
+    return _validate_item(_parse_json_object(content))
+
+
+def parse_batch_result(content: str, requested_keys: list[str]) -> tuple[dict, dict]:
+    """
+    Validate a single-call batch output: {"items": {key: result}}.
+
+    Returns (valid_results, errors). Each requested key is validated
+    independently: a valid entry is scored, while a missing or malformed entry
+    becomes a per-item error. Missing items are NEVER silently scored.
+    """
+    try:
+        data = _parse_json_object(content)
+    except ValueError as exc:
+        return {}, {k: f"Invalid AI batch output: {exc}" for k in requested_keys}
+    items = data.get("items")
+    if not isinstance(items, dict):
+        # The model sometimes omits the "items" wrapper and returns a flat
+        # {key: result} map directly. Accept that shape too.
+        if data and all(isinstance(v, dict) for v in data.values()):
+            items = data
+        else:
+            return {}, {k: "Invalid AI batch output: no 'items' object" for k in requested_keys}
+
+    results: dict = {}
+    errors: dict = {}
+    for key in requested_keys:
+        if key not in items:
+            errors[key] = f"Model did not return a result for item {key!r}"
+            continue
+        entry = items[key]
+        if not isinstance(entry, dict):
+            errors[key] = f"Invalid result for item {key!r}: not a JSON object"
+            continue
+        try:
+            results[key] = _validate_item(entry)
+        except ValueError as exc:
+            errors[key] = f"Invalid result for item {key!r}: {exc}"
+    return results, errors
 
 
 # ---------------------------------------------------------------------------
@@ -406,20 +509,63 @@ def _evaluate_single(key: str, entry: MMSEBatchItem):
 
 
 def _max_concurrency() -> int:
-    """Provider-aware batch concurrency. Ollama is local (single GPU/CPU) so it
-    evaluates sequentially by default; cloud providers may run in parallel."""
-    if AI_PROVIDER == "ollama":
-        return OLLAMA_MAX_CONCURRENCY
+    """Provider-aware per-item concurrency for the Gemini path."""
     if AI_PROVIDER == "gemini":
         return GEMINI_MAX_CONCURRENCY
-    return 8
+    return OLLAMA_MAX_CONCURRENCY
+
+
+def _evaluate_ollama_batch(req: MMSEEvaluateRequest) -> tuple[dict, dict, int]:
+    """
+    Single-call Ollama batch evaluation: ONE /api/chat generation for the whole
+    batch. Returns (results, errors, provider_failures). provider_failures counts
+    items that failed because the provider itself was unreachable.
+    """
+    keys = list(req.items.keys())
+    results: dict = {}
+    errors: dict = {}
+    provider_failures = 0
+
+    # Items with invalid keys / empty responses are rejected client-side, but
+    # guard server-side too so the model is never asked about them.
+    valid_keys: list[str] = []
+    for key in keys:
+        section, sep, item_key = key.partition(".")
+        if not sep or not item_key:
+            errors[key] = f"Invalid item key: {key!r}"
+            continue
+        if section not in AI_SECTIONS:
+            errors[key] = f"Unsupported MMSE section for AI evaluation: {section}"
+            continue
+        if not req.items[key].response.strip():
+            errors[key] = f"Empty response for {key} cannot be evaluated"
+            continue
+        valid_keys.append(key)
+
+    if not valid_keys:
+        return results, errors, provider_failures
+
+    messages = build_batch_messages({k: req.items[k] for k in valid_keys})
+    try:
+        content = _call_ollama(messages, timeout=OLLAMA_BATCH_TIMEOUT)
+        parsed, parsed_errors = parse_batch_result(content, valid_keys)
+    except AIProviderError as exc:
+        for key in valid_keys:
+            errors[key] = str(exc)
+        return results, errors, len(valid_keys)
+
+    results.update(parsed)
+    errors.update(parsed_errors)
+    return results, errors, provider_failures
 
 
 def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     """
     Evaluate a batch of MMSE responses.
 
-    Returns {"items": {key: result}, "errors": {key: message}}. Raises:
+    Provider-aware: Ollama uses ONE model generation for the whole batch;
+    Gemini keeps per-item parallel evaluation. Returns
+    {"items": {key: result}, "errors": {key: message}}. Raises:
       503 when AI is disabled or the provider is unreachable for every item;
       422 when the request itself is malformed (no items supplied).
     """
@@ -431,25 +577,38 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     if not req.items:
         raise HTTPException(status_code=422, detail="No MMSE items to evaluate.")
 
+    t0 = time.perf_counter()
     keys = list(req.items.keys())
     results: dict = {}
     errors: dict = {}
     provider_failures = 0
 
-    workers = min(len(keys), _max_concurrency())
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(_evaluate_single, key, req.items[key]): key for key in keys
-        }
-        for future in as_completed(futures):
-            key = futures[future]
-            outcome = future.result()
-            if isinstance(outcome, dict):
-                results[key] = outcome
-            else:
-                errors[key] = outcome.message
-                if outcome.kind == "provider":
-                    provider_failures += 1
+    if AI_PROVIDER == "ollama":
+        results, errors, provider_failures = _evaluate_ollama_batch(req)
+    else:
+        workers = min(len(keys), _max_concurrency())
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_evaluate_single, key, req.items[key]): key for key in keys
+            }
+            for future in as_completed(futures):
+                key = futures[future]
+                outcome = future.result()
+                if isinstance(outcome, dict):
+                    results[key] = outcome
+                else:
+                    errors[key] = outcome.message
+                    if outcome.kind == "provider":
+                        provider_failures += 1
+
+    elapsed = time.perf_counter() - t0
+    # Development-side timing only (backend log; never shown in the UI).
+    print(
+        f"[ai_eval] AI_PROVIDER={AI_PROVIDER} items={len(keys)} "
+        f"provider_calls={1 if AI_PROVIDER == 'ollama' else len(keys)} "
+        f"elapsed={elapsed:.2f}s results={len(results)} errors={len(errors)}",
+        flush=True,
+    )
 
     if not results and errors and provider_failures == len(errors):
         raise HTTPException(

@@ -66,7 +66,7 @@
 - **Framework:** FastAPI 0.121 + Pydantic v2 + Uvicorn.
 - **Entry point:** `backend/src/api.py` (`uvicorn src.api:app`).
 - **Routes:** `GET /` (health message), `POST /predict` (prediction), `POST /mmse/evaluate` (AI-assisted MMSE **batch** scoring), `OPTIONS /predict` (CORS preflight).
-- **AI service:** `backend/src/ai_eval.py` — provider-agnostic (`AI_PROVIDER=ollama|gemini|none`), **batch** request with per-item structured JSON results, strict per-item validation, per-section prompts, provider-aware concurrency via stdlib `concurrent.futures` (`OLLAMA_MAX_CONCURRENCY=1` sequential for local Ollama to avoid GPU/CPU contention; `GEMINI_MAX_CONCURRENCY=8` parallel for cloud). Uses only Python stdlib (no new deps). No patient data logged/persisted. Backend-only secrets via env / `.env` (python-dotenv).
+- **AI service:** `backend/src/ai_eval.py` — provider-agnostic (`AI_PROVIDER=ollama|gemini|none`), **batch** request with per-item structured JSON results, strict per-item validation, per-section prompts. **Provider-aware batching:** Ollama evaluates the WHOLE batch with a SINGLE `/api/chat` call (one prompt containing every item + its section-specific rules; one structured JSON response with one entry per item — no per-item Ollama calls, no concurrent Ollama calls). Gemini keeps per-item parallel evaluation via stdlib `concurrent.futures` (`GEMINI_MAX_CONCURRENCY=8`). Uses only Python stdlib (no new deps). No patient data logged/persisted. Backend-only secrets via env / `.env` (python-dotenv).
 - **Validation:** Pydantic `PatientInput` model. Note: no `min`/`max` range constraints are enforced server-side.
 - **Model loading:** `joblib.load` at import time via `load_model()`; checks `MODEL_PATH` env, then several default paths. If missing, server still starts but `/predict` returns 500.
 
@@ -214,11 +214,11 @@ alzheimers_ml_project/
     }
   }
   ```
-  - `correct` bool; `score` must equal 1/0 per correct; `confidence` in [0,1]; `reason` non-empty. Every result is validated; malformed output lands in `errors` with **no score assigned** (no silent scoring).
-  - `503` when AI is disabled (`AI_PROVIDER=none`) or the provider is unreachable for every item; `422` for a malformed request (no items supplied).
-  - The backend evaluates items in parallel internally (`concurrent.futures`, ≤8 workers) — still ONE frontend HTTP request.
-- **Provider config (backend env only):** `AI_PROVIDER=ollama|gemini|none`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (default `gemma3`), `GEMINI_BASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_TIMEOUT` (per provider call, default 30s).
-- **Frontend caller:** `evaluateMmseBatch()` in `frontend/src/api.ts` (axios timeout 90s; `isTimeoutError()` detects timeouts → "AI assessment timed out.").
+   - `correct` bool; `score` must equal 1/0 per correct; `confidence` in [0,1]; `reason` non-empty. Every result is validated; malformed output lands in `errors` with **no score assigned** (no silent scoring).
+   - `503` when AI is disabled (`AI_PROVIDER=none`) or the provider is unreachable for every item; `422` for a malformed request (no items supplied).
+   - **Batching is provider-aware:** with Ollama the backend sends exactly ONE model call for the whole batch (single prompt + single JSON response); missing/malformed per-item entries become per-item `errors`, never silent scores. With Gemini it evaluates items in parallel internally (`concurrent.futures`, ≤8 workers). Either way it is still ONE frontend HTTP request.
+- **Provider config (backend env only):** `AI_PROVIDER=ollama|gemini|none`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (default `gemma3`), `GEMINI_BASE_URL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_TIMEOUT` (per provider call, default 30s), `OLLAMA_BATCH_TIMEOUT` (single Ollama batch call, default 175s, must stay under the frontend's 180s).
+- **Frontend caller:** `evaluateMmseBatch()` in `frontend/src/api.ts` (axios timeout 180s; `isTimeoutError()` detects timeouts → "AI assessment timed out.").
 - **Disclaimers:** AI result is an assist signal, never a diagnosis. Confidence is a model signal, not clinical certainty. `AI_PROVIDER=none` or an unreachable provider surfaces "AI assessment unavailable." with Retry/Manual-review in the UI.
 
 ---
@@ -398,6 +398,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `babcb03` | `fix(mmse): location-aware place, friendly errors, observation labels` | MMSE UX refinements |
 | 2026-08-13 | `2abab40` | `fix(mmse): sequential Ollama batch eval with 180s frontend timeout` | Provider-aware concurrency + batch timeout |
 | 2026-08-13 | `9f29276` | `fix(mmse): add exact copying figure reference asset` | Section 11 reference figure wired |
+| 2026-08-13 | (single-call batch) | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
 
 ---
 
@@ -427,6 +428,13 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Single-call Ollama batch evaluation (perf milestone):** replaced up to 30 sequential per-item Ollama `/api/chat` calls with exactly **ONE** `/api/chat` call that returns structured JSON for every AI-evaluable MMSE item at once (`backend/src/ai_eval.py`). The two-phase batch architecture and the frontend contract are unchanged — the browser still sends exactly ONE `POST /mmse/evaluate`. Details:
+  - `BATCH_SYSTEM_PROMPT` + `build_batch_messages()` build a single system+user pair where each item keeps its section-specific rules (`_prompt_for`), so the one call preserves per-item semantics.
+  - `_evaluate_ollama_batch()` sends one request with `OLLAMA_BATCH_TIMEOUT` (default 175s, fits under the 180s browser timeout) and validates every requested key via `parse_batch_result()`. Missing/malformed entries become per-item `errors` — never silently scored. Invalid keys / unsupported sections / empty responses are rejected server-side before the call. A flat `{key: result}` response (without the `items` wrapper) is accepted as a fallback.
+  - `evaluate_mmse_batch()` is provider-aware: Ollama → single call; Gemini → unchanged per-item `ThreadPoolExecutor` path. `_max_concurrency()` now only serves the Gemini path.
+  - Dev-side timing log (`[ai_eval] AI_PROVIDER=... items=... provider_calls=... elapsed=...s results=... errors=...`) goes to the backend console only — never shown in the UI.
+  - **Measured bottleneck (honest, not faked):** the 30-item realistic batch generates ~900–1500 output tokens at ~7.4 tok/s (Gemma 3 4B split 54% CPU / 46% GPU on a GTX 1650 4 GB, so the 3.5 GB model can't sit fully on the GPU). Measured single-call timings: 3-item ~9.5–14.7s, 10-item ~60–70s, full 30-item ~139–158s when it completes, but generation variance occasionally pushes a run past the 175s backend / 180s browser window (observed 170s and 175s timeouts → 503). The user's ~30–45s target is **not achievable on this hardware with this model**; the single-call design removes the per-item call overhead but the token-generation rate is the floor. This is reported rather than hidden, per the task instructions.
+  - Accuracy regression (12-item batch, 75.2s, HTTP 200, 0 errors) passed: correctly judged "2026"/"twenty twenty-six", Maharashtra, apple, 93, 65 ("sixty-five"), wristwatch/watch, correct repetition as correct; 1999, Delhi vs Mumbai, banana, 92, "I don't know" as incorrect. `npm run build` passes; `/predict` still HTTP 200.
 - **Exact copying figure wired into Section 11:** supplied `frontend/public/mmse-copying-figure.png` referenced via `COPYING_REFERENCE_IMAGE = '/mmse-copying-figure.png'` in `frontend/src/mmse/config.ts`. The Copying section (already rendering "Please copy this picture." then the `<img>` when the constant is set) now shows the exact figure as the ONLY stimulus; drawing canvas and examiner scoring for Q11 kept as-is. No vision (Ollama/Gemma/Gemini/OpenAI), no camera upload, no automated figure scoring. Backend, `/predict`, ML, SHAP, MMSE scoring, and AI batch architecture untouched.
 - **Provider-aware batch concurrency + 180s timeout (`2abab40`):** Real runtime test of Ollama + Gemma 3 4B showed a single `/api/chat` call completes in ~3–15 s, but the full MMSE batch timed out at the frontend's 90 s because the backend evaluated up to 8 items concurrently on a single local GPU (GTX 1650 4 GB). Fix (optimization ONLY — no MMSE structure/scoring/`/predict` changes):
   - **Backend `ai_eval.py`:** provider-aware concurrency via `_max_concurrency()` — `OLLAMA_MAX_CONCURRENCY` (default `1`, sequential) for local Ollama to avoid GPU/CPU contention; `GEMINI_MAX_CONCURRENCY` (default `8`, unchanged cloud behavior). New env vars documented in the module docstring. The two-phase batch architecture is unchanged — the browser still sends exactly ONE `POST /mmse/evaluate`.
@@ -442,14 +450,15 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: **clean.** Git branch `main`, tracking `origin/main`. Copying-figure work committed and pushed (see below). Batch work `8cadbc5` (+ `e9478e7` docs), UX work `babcb03`, concurrency work `2abab40`. `npm run build` (tsc + vite) passes; full MMSE batch verified live against real Gemma 3 4B (sequential, ~172 s < 180 s timeout). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves.
+- Working tree: single-call batch changes in `backend/src/ai_eval.py` (plus this AI_CONTEXT.md) staged/pending commit; then clean. Git branch `main`, tracking `origin/main`. Copying-figure work committed and pushed (`9f29276`). Batch work `8cadbc5` (+ `e9478e7` docs), UX work `babcb03`, concurrency work `2abab40`. `npm run build` (tsc + vite) passes; single-call 30-item batch verified live against real Gemma 3 4B (~139–158s when complete; variance can exceed 175s — see warnings). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves.
 
 ### Next Recommended Task
-- Configure a real AI provider and smoke-test live AI responses (correct/incorrect paths) before release.
-- Supply the exact MMSE copying figure asset and set `COPYING_REFERENCE_IMAGE`.
+- Consider whether the local Ollama latency is acceptable for production. The full 30-item batch sits close to the 180s browser timeout on this hardware. Options to revisit deliberately (never by removing items): a larger GPU, a smaller/quantized model, streaming progress, or a split-batch strategy. Any of these needs explicit user instruction.
+- Supply/verify the exact MMSE copying figure asset and set `COPYING_REFERENCE_IMAGE` (done — figure supplied).
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
+- `backend/src/ai_eval.py` (single-call Ollama batch: `BATCH_SYSTEM_PROMPT`, `build_batch_messages`, `_parse_json_object`/`_validate_item`/`parse_batch_result` validation refactor, `_evaluate_ollama_batch`, provider-aware `evaluate_mmse_batch`, `OLLAMA_BATCH_TIMEOUT` env, dev-side `[ai_eval]` timing log)
 - `frontend/src/mmse/state.ts` (+`AssessmentLocation`; `MMSEState.location`)
 - `frontend/src/mmse/config.ts` (`PLACE_ITEMS` without hardcoded expected; `LOCATION_FIELDS` for the examiner location form)
 - `frontend/src/mmse/batch.ts` (`buildBatchItems` uses `state.location` for orientation_place; location-aware `sectionResponseCounts`; `collectAiItems`, `countAssessmentErrors`)
@@ -463,7 +472,7 @@ alzheimers_ml_project/
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
-- **Live Ollama runtime (real Gemma 3 4B, `gemma3:latest`):** single `/api/chat` 14.86 s (incl. cold load); 3-item `/mmse/evaluate` 16.23 s; **30-item full batch 171.99 s, HTTP 200, all 30 structured results, 0 errors** — sequential (`OLLAMA_MAX_CONCURRENCY=1`), completes within the 180 s browser timeout. `/predict` 200 (unchanged). Structured output schema `{correct, score, confidence, reason}` verified.
+- **Single-call Ollama runtime (real Gemma 3 4B, `gemma3:latest`):** 3-item `/mmse/evaluate` ~9.5–14.7s; 10-item ~60–70s; **30-item full batch ~139–158s HTTP 200 with all 30 structured results when it completes** — but generation variance occasionally exceeds the 175s backend / 180s browser window (observed 170s & 175s timeouts → 503). 12-item accuracy regression HTTP 200, 0 errors, all judgments sensible. Direct single-call diagnostics: 916–1533 output tokens, ~7.4 tok/s, prompt_eval ~600–2300 tokens. `/predict` 200 (unchanged). Structured output schema `{correct, score, confidence, reason}` verified; flat (no `items` wrapper) response shape also accepted.
 - Frontend batch logic verified by Node harness (compiled `state.ts` + `batch.ts`): location-unconfigured → no `orientation_place` items sent; location-configured → 5 place items sent with the examiner's values as `expected`; place response counts require location + response; `countAssessmentErrors` counts only `error` items; `applyBatchResultsToDraft` still applies place scores; totals remain integer 0–30.
 - Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
 
@@ -479,9 +488,10 @@ alzheimers_ml_project/
 - `babcb03` — `fix(mmse): location-aware place, friendly errors, observation labels`
 - `2abab40` — `fix(mmse): sequential Ollama batch eval with 180s frontend timeout`
 - `9f29276` — `fix(mmse): add exact copying figure reference asset`
+- (pending) — `perf(mmse): reduce local ai assessment latency`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `9f29276`. Working tree clean.
+- Pushed to `origin/main` successfully through `9f29276`. Working tree currently has the uncommitted single-call batch changes (this perf milestone).
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
@@ -490,5 +500,5 @@ alzheimers_ml_project/
 - Do not retrain the model or modify the `/predict` contract without explicit instruction.
 - AI results are an assist signal, never a diagnosis; confidence is a model signal, not clinical certainty. Keep these disclaimers in the UI.
 - AI secrets (`GEMINI_API_KEY`, etc.) must stay backend-only (env/`.env`); never ship them in React or commit them.
-- Real AI-model correctness was verified on this machine (Ollama 0.32.9 + Gemma 3 4B): full MMSE batch completes sequentially in ~172 s. Note the full batch is close to the 180 s browser timeout — if the model load or machine load increases, consider raising `OLLAMA_MAX_CONCURRENCY`/timeout deliberately, never by removing items.
+- Real AI-model correctness was verified on this machine (Ollama 0.32.9 + Gemma 3 4B): full MMSE batch now evaluates in a SINGLE model call. **Latency warning:** the full 30-item batch takes ~139–158s when it completes and can exceed the 175s backend / 180s browser timeout due to generation variance (Gemma 3 4B runs ~7.4 tok/s split 54% CPU / 46% GPU on a 4 GB GTX 1650). Do not raise the frontend timeout above what the user configured without instruction; never "fix" latency by removing items or lowering quality. Options (larger GPU, smaller/quantized model, streaming, split-batch) require explicit user approval.
 - `README.md` has stale claims (e.g., Dataset.csv "not committed") — treat code as authoritative.
