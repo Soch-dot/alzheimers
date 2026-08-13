@@ -230,7 +230,7 @@ alzheimers_ml_project/
 ### `POST /mmse/copying/evaluate` (Q11 vision-assisted figure copying — separate service)
 - **Purpose:** Evaluates ONLY MMSE Question 11 (figure copying). The backend loads the trusted reference figure server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`); the client NEVER supplies the reference. Patient drawing is processed in memory (Pillow) and discarded — never persisted, logged, or returned.
 - **Request:** raw image bytes with `Content-Type: image/jpeg|image/png|image/webp` **or** JSON `{"image": "data:image/jpeg;base64,..."}` (or plain base64). No multipart (python-multipart is not installed).
-- **Image handling:** validates MIME + size (`VISION_MAX_UPLOAD_BYTES`, default 10 MB), decodes via Pillow, normalizes EXIF orientation, preserves aspect ratio, downscales > `VISION_MAX_IMAGE_DIMENSION` (default 2048). Rejects: empty body, unsupported MIME, oversized, undecodable → HTTP 400 with a friendly message.
+- **Image handling:** validates MIME + size (`VISION_MAX_UPLOAD_BYTES`, default 10 MB), decodes via Pillow, normalizes EXIF orientation, preserves aspect ratio, downscales > `VISION_MAX_IMAGE_DIMENSION` (default 2048). **Blank / near-blank pre-check** (`has_drawing_content` in `vision_image.py`): a deterministic sanity gate BEFORE any provider call. It measures the fraction of pixels meaningfully darker than the estimated paper level (90th percentile grayscale). Conservative thresholds: `VISION_BLANK_INK_DELTA` (default 20 gray levels below paper) and `VISION_BLANK_MIN_INK_FRACTION` (default 0.5% of pixels). Blank/near-blank/ultra-low-contrast → HTTP 400 "No drawing detected. Please submit a clear photo of the patient's drawing." — the vision provider is NEVER invoked for a rejected image. A faint-but-visible pencil drawing passes (deliberately conservative to avoid over-rejection). Rejects: empty body, unsupported MIME, oversized, undecodable → HTTP 400 with a friendly message.
 - **Response (normalized structured result):**
   ```json
   {
@@ -243,7 +243,7 @@ alzheimers_ml_project/
   ```
   - `score` = 0/1 and must agree with `correct`; `confidence` in [0,1]; `reason` non-empty. Strict validation: malformed provider output → NO score, HTTP 502 "Vision assessment returned an invalid result." Low confidence (`< AI_CONFIDENCE_REVIEW_THRESHOLD`, 0.7) → `review_required: true`.
   - Timeout (`VISION_TIMEOUT`, default 60s) → HTTP 504 "Vision assessment timed out." Provider unreachable/not configured → HTTP 503 "Vision assessment unavailable." These are separate from the text-MMSE 175/180s budgets.
-- **Provider config (backend env only):** `VISION_PROVIDER=ollama|gemini|openai`, `OLLAMA_VISION_MODEL` (default `gemma3`), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`/`GEMINI_BASE_URL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_TIMEOUT`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `COPYING_REFERENCE_PATH`.
+- **Provider config (backend env only):** `VISION_PROVIDER=ollama|gemini|openai`, `OLLAMA_VISION_MODEL` (default `gemma3`), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`/`GEMINI_BASE_URL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_TIMEOUT`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `VISION_BLANK_INK_DELTA`, `VISION_BLANK_MIN_INK_FRACTION`, `COPYING_REFERENCE_PATH`.
 - **MMSE copying criterion:** geometric structure, presence of both figures, and required overlap/intersection ONLY. Explicitly NOT scored: artistic quality, handwriting, penmanship, aesthetics, paper cleanliness, color, line thickness, "looks professional". No invented clinical criteria.
 - **Frontend:** NO UI changes in the backend milestone; the camera/upload interface is a later UI/UX prompt. No frontend code consumes this endpoint yet.
 
@@ -372,6 +372,7 @@ alzheimers_ml_project/
 | Partial batch failure (invalid AI output / provider error for some items) | Medium | Those items stay unscored until Retry/manual | Yes (by design) | Per-item errors surfaced in UI; no silent score |
 | AI is an assist signal only — never a diagnosis or clinical certainty | Medium | Misinterpretation risk | No (must keep disclaimers) | Keep confidence phrased as model signal; examiner review required |
 | Q11 vision UI not wired (backend milestone only) | Medium | Camera/upload not available yet; Q11 stays examiner-scored | Yes until UI prompt | Implement UI/UX in a separate later prompt |
+| Blank Q11 submissions were reaching the vision model | Fixed | Blank canvas could be scored as correct | — | Pre-check gate added (`has_drawing_content`), verified blank → 400 before provider |
 
 ---
 
@@ -427,6 +428,7 @@ alzheimers_ml_project/
 | 2026-08-13 | `9f29276` | `fix(mmse): add exact copying figure reference asset` | Section 11 reference figure wired |
 | 2026-08-13 | `6943501` | `perf(mmse): reduce local ai assessment latency` | Ollama evaluates the whole batch in ONE model call |
 | 2026-08-13 | `4fdc6fe` | `feat(mmse): add q11 vision evaluation service` | Backend vision endpoint + provider abstraction |
+| 2026-08-13 | `177c62f` | `fix(mmse): reject blank q11 submissions before vision` | Blank/near-blank pre-check gate |
 
 ---
 
@@ -456,6 +458,7 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Q11 blank-submission pre-check (fix(mmse): reject blank q11 submissions before vision):** Added a deterministic image-content sanity gate in `backend/src/vision_image.py` (`has_drawing_content`) that runs inside `prepare_patient_image` BEFORE any vision provider call. It measures the fraction of pixels that are meaningfully darker than the estimated paper level (90th percentile of the grayscale histogram). Conservative thresholds: `VISION_BLANK_INK_DELTA` (default 20 gray levels below paper) and `VISION_BLANK_MIN_INK_FRACTION` (default 0.5% of pixels). Blank/near-blank/ultra-low-contrast images → HTTP 400 "No drawing detected. Please submit a clear photo of the patient's drawing." — the provider is NEVER invoked. Faint-but-visible drawings deliberately pass (low threshold avoids over-rejection). Verified empirically: blank 0.0% ink, near-blank (single pixel) <0.5%, tiny 0.52%, good 2.09%, faint-235 ~1.5%, poor 1.02%. Real Ollama test: BLANK → 400 in 0.0s (no `[vision_eval]` log entry — Gemma never called), GOOD → 200 44.8s `{correct:true, score:1, confidence:0.95}`, POOR → 200 35.1s `{correct:false, score:0, confidence:0.6, review_required:true}`. New tests: `TestBlankPreCheck` (7 cases: blank rejected, near-blank rejected, blank never calls provider, simple/faint/good/poor drawings reach provider) — 29/29 backend tests pass. Frontend untouched; `/predict` + `/mmse/evaluate` re-verified HTTP 200; `npm run build` passes.
 - **Q11 vision-assisted figure copying — backend/infrastructure milestone (feat(mmse): add q11 vision evaluation service):** New dedicated endpoint `POST /mmse/copying/evaluate` for MMSE Question 11 ONLY. Frontend UI untouched (no camera/upload/preview/reviewer — those belong to a separate later UI/UX prompt). Details:
   - **Provider abstraction (`backend/src/vision_eval.py`):** built around an OpenAI-compatible multimodal `chat/completions` contract. Exactly ONE provider runs per assessment (`VISION_PROVIDER=ollama|gemini|openai`); no voting, no auto-fallback. Shared layer owns the MMSE copying criterion prompt, normalized schema, strict validation, confidence/review, error normalization, and timeout semantics; provider adapters (`OllamaVisionProvider` via `/v1/chat/completions`, `GeminiVisionProvider`, `OpenAIVisionProvider`) only set base URL/model/auth/payload/response extraction. Config backend-only: `VISION_TIMEOUT` (default 60s — deliberately separate from the text-MMSE 175/180s budgets), `GEMINI_API_KEY`/`GEMINI_VISION_MODEL`, `OPENAI_API_KEY`/`OPENAI_VISION_MODEL`/`OPENAI_BASE_URL`, `VISION_MAX_UPLOAD_BYTES`, `VISION_MAX_IMAGE_DIMENSION`, `COPYING_REFERENCE_PATH`.
   - **Image handling (`backend/src/vision_image.py`):** in-memory only (Pillow, already pinned). Validates MIME (JPEG/PNG/WebP) + size (≤10 MB), decodes, EXIF-orients, preserves aspect ratio, downscales >2048 px, re-encodes to JPEG base64 data URLs. Patient images are NEVER persisted, logged, or returned. Upload as raw image bytes (`Content-Type: image/...`) or JSON `{"image": "data:...;base64,..."}` — no multipart (python-multipart not installed; no new deps added).
@@ -485,7 +488,7 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
-- Working tree: Q11 vision milestone (`backend/src/vision_eval.py`, `backend/src/vision_image.py`, `backend/src/api.py` endpoint, `backend/tests/test_vision_eval.py`) pending commit. Git branch `main`, tracking `origin/main`. Perf milestone `6943501` + `db0f02f` pushed. `npm run build` (tsc + vite) passes; `/predict` and `/mmse/evaluate` verified HTTP 200 against the live server; Q11 vision endpoint verified live against real Gemma 3 4B. Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest` so the backend default `OLLAMA_MODEL=gemma3` resolves; Gemma 3 4B supports vision.
+- Working tree: blank pre-check changes (`backend/src/vision_image.py`, `backend/tests/test_vision_eval.py`) pending commit. Git branch `main`, tracking `origin/main`. Q11 vision milestone `4fdc6fe` + `3c837f5` pushed; perf milestone `6943501`/`db0f02f` pushed. `npm run build` passes; `/predict` and `/mmse/evaluate` verified HTTP 200; Q11 vision endpoint verified live against real Gemma 3 4B (blank → 400 pre-provider; good/poor → 200 with structured results). Ollama 0.32.9 installed with `gemma3:4b` aliased as `gemma3:latest`; Gemma 3 4B supports vision.
 
 ### Next Recommended Task
 - Implement the Q11 UI/UX milestone (camera/upload → preview → submit to `/mmse/copying/evaluate` → examiner review with the normalized result + `review_required`) in a SEPARATE prompt. Backend is ready and contract-documented.
@@ -493,6 +496,8 @@ alzheimers_ml_project/
 - Then consider live per-patient SHAP as the next feature.
 
 ### Files Recently Changed
+- `backend/src/vision_image.py` (blank/near-blank pre-check: `has_drawing_content`, `VISION_BLANK_INK_DELTA`, `VISION_BLANK_MIN_INK_FRACTION`, hook into `prepare_patient_image`)
+- `backend/tests/test_vision_eval.py` (`TestBlankPreCheck`: 7 pre-check cases + synthetic blank/near-blank/simple/faint/poor helpers)
 - `backend/src/vision_eval.py` (NEW: Q11 vision provider abstraction + evaluation service)
 - `backend/src/vision_image.py` (NEW: Q11 image validation/normalization/encoding + trusted reference loader)
 - `backend/src/api.py` (`POST /mmse/copying/evaluate` endpoint; raw-binary or JSON-base64 body)
@@ -511,8 +516,8 @@ alzheimers_ml_project/
 
 ### Tests Verified
 - `npm run build` (`tsc && vite build`) — passes, no TypeScript errors.
-- **Q11 vision backend (synthetic images only):** `python -m unittest backend.tests.test_vision_eval` — 22/22 pass (image validation, reference asset, OpenAI-compatible multimodal payload, result validation, low-confidence flagging, score mapping, timeout/unavailable/invalid kinds, contracts present).
-- **Real Ollama + Gemma 3 4B Q11 vision test:** good synthetic copy → `{correct: true, score: 1, confidence: 0.95, review_required: false}` (53.7s); poor synthetic copy (single figure) → `{correct: false, score: 0, confidence: 0.6, review_required: true}` (37.5s). Blank-canvas false-positive observed and reported honestly. Gemini/OpenAI: **not live-tested (no credentials configured)**; adapters covered by unit tests.
+- **Q11 blank pre-check (synthetic, stdlib unittest):** `python -m unittest backend.tests.test_vision_eval` — 29/29 pass. New: completely blank white → rejected (400 message); near-blank (single pixel) → rejected; blank NEVER calls the provider (verified by mocking `get_provider` to fail if reached); simple visible drawing / faint 235-gray drawing / good copy / poor copy all reach the provider and score 0/1. Existing image-validation and result-validation suites still pass.
+- **Real Ollama + Gemma 3 4B Q11 vision test (post pre-check):** BLANK 640×480 white → **HTTP 400 in 0.0s** ("No drawing detected...") with NO `[vision_eval]` log entry (Gemma never invoked); GOOD synthetic copy → HTTP 200 in 44.8s `{correct: true, score: 1, confidence: 0.95, review_required: false}`; POOR copy (single figure) → HTTP 200 in 35.1s `{correct: false, score: 0, confidence: 0.6, review_required: true}`. Gemini/OpenAI: not live-tested (no credentials).
 - **Single-call Ollama runtime (real Gemma 3 4B, `gemma3:latest`):** 3-item `/mmse/evaluate` ~9.5–14.7s; 10-item ~60–70s; **30-item full batch ~139–158s HTTP 200 with all 30 structured results when it completes** — but generation variance occasionally exceeds the 175s backend / 180s browser window (observed 170s & 175s timeouts → 503). 12-item accuracy regression HTTP 200, 0 errors, all judgments sensible. Direct single-call diagnostics: 916–1533 output tokens, ~7.4 tok/s, prompt_eval ~600–2300 tokens. `/predict` 200 (unchanged). Structured output schema `{correct, score, confidence, reason}` verified; flat (no `items` wrapper) response shape also accepted.
 - Frontend batch logic verified by Node harness (compiled `state.ts` + `batch.ts`): location-unconfigured → no `orientation_place` items sent; location-configured → 5 place items sent with the examiner's values as `expected`; place response counts require location + response; `countAssessmentErrors` counts only `error` items; `applyBatchResultsToDraft` still applies place scores; totals remain integer 0–30.
 - Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
@@ -531,12 +536,14 @@ alzheimers_ml_project/
 - `9f29276` — `fix(mmse): add exact copying figure reference asset`
 - `6943501` — `perf(mmse): reduce local ai assessment latency`
 - `4fdc6fe` — `feat(mmse): add q11 vision evaluation service`
+- `177c62f` — `fix(mmse): reject blank q11 submissions before vision`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `db0f02f`. Q11 vision milestone `4fdc6fe` committed locally (pending push after docs record).
+- Pushed to `origin/main` successfully through `3c837f5`. Blank pre-check fix `177c62f` committed locally (pending push after docs record).
 
 ### Important Warnings
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
+- Q11 blank/near-blank submissions are rejected deterministically BEFORE any vision provider call (HTTP 400, `has_drawing_content` in `vision_image.py`). This fixes the earlier blank-canvas false-positive. The gate is conservative (0.5% ink / 20 gray-level delta) so faint-but-visible drawings pass — do NOT tighten it without explicit instruction or you will over-reject legitimate faint pencil drawings.
 - Q11 vision backend exists (`POST /mmse/copying/evaluate`) but the frontend does NOT use it yet (UI/UX is a separate later prompt). Q11 currently remains examiner-scored in the UI.
 - Q11 reference figure is loaded server-side from `frontend/public/mmse-copying-figure.png` (or `COPYING_REFERENCE_PATH`). Never accept the reference from the client; never duplicate/regenerate it. Note: the file bytes are JPEG despite the `.png` extension — Pillow and browsers content-sniff so it works; do not "fix" the extension.
 - `VISION_PROVIDER` defaults to `ollama`; Gemini/OpenAI require backend `GEMINI_API_KEY`/`OPENAI_API_KEY` and were not live-tested. Provider selection is ONE provider per assessment (no voting/fallback by design).
