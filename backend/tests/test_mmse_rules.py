@@ -1,7 +1,8 @@
 """
-Backend tests for deterministic MMSE Orientation-to-Time scoring and the
-backend regression fix: the five orientation_time items must be scored
-deterministically server-side and must NEVER reach the AI provider.
+Backend tests for deterministic MMSE Orientation-to-Time and Serial-7s scoring
+and the backend regression fixes: orientation_time and attention_serial7 items
+must be scored deterministically server-side and must NEVER reach the AI
+provider.
 
 Run from the project root:
 
@@ -17,6 +18,10 @@ Covers the task's required checks:
   6. missing AI result -> per-item error (never fabricated)
   7. deterministic-only batch succeeds even with AI_PROVIDER=none
   8. /predict unchanged (sanity import check)
+  9. all five serial-7 items correct (93/86/79/72/65) -> 5/5, zero AI calls
+ 10. mixed serial-7 (93, 86, 80, 72, 65) -> 4/5 (1 1 0 1 1)
+ 11. number-word serial-7 answers -> 5/5
+ 12. serial-7 keys excluded from the actual AI batch prompt
 """
 
 import os
@@ -35,12 +40,16 @@ from src.ai_eval import (  # noqa: E402
     evaluate_mmse_batch,
 )
 from src.mmse_rules import (  # noqa: E402
+    SERIAL_7_EXPECTED,
+    evaluate_attention_serial7,
     evaluate_orientation_time,
     _parse_date,
+    _parse_number,
     _parse_year,
 )
 
 ORIENTATION_KEYS = ["year", "season", "date", "day", "month"]
+SERIAL7_CORRECT = ["93", "86", "79", "72", "65"]
 
 
 def _batch(**kwargs):
@@ -145,6 +154,64 @@ class EvaluationRulesTest(unittest.TestCase):
         )
 
 
+class Serial7RulesTest(unittest.TestCase):
+    """Unit tests for the deterministic Serial-7s rule engine."""
+
+    def test_all_five_correct(self):
+        for i, expected in enumerate(SERIAL_7_EXPECTED, start=1):
+            result = evaluate_attention_serial7(str(i), str(expected))
+            self.assertIsNotNone(result, i)
+            self.assertTrue(result["correct"], f"item {i}: {expected}")
+            self.assertEqual(result["score"], 1, i)
+            self.assertEqual(result["confidence"], 1.0, i)
+
+    def test_incorrect_answers(self):
+        wrong = {1: "92", 2: "85", 3: "80", 4: "71", 5: "60"}
+        for i, value in wrong.items():
+            result = evaluate_attention_serial7(str(i), value)
+            self.assertIsNotNone(result, i)
+            self.assertFalse(result["correct"], f"item {i}: {value}")
+            self.assertEqual(result["score"], 0, i)
+
+    def test_mixed_4_of_5(self):
+        answers = {1: "93", 2: "86", 3: "80", 4: "72", 5: "65"}
+        expected = {1: True, 2: True, 3: False, 4: True, 5: True}
+        for i, value in answers.items():
+            result = evaluate_attention_serial7(str(i), value)
+            self.assertEqual(result["correct"], expected[i], f"item {i}: {value}")
+        total = sum(
+            evaluate_attention_serial7(str(i), v)["score"] for i, v in answers.items()
+        )
+        self.assertEqual(total, 4)
+
+    def test_number_words(self):
+        words = {1: "ninety-three", 2: "eighty-six", 3: "seventy-nine", 4: "seventy-two", 5: "sixty-five"}
+        for i, value in words.items():
+            result = evaluate_attention_serial7(str(i), value)
+            self.assertTrue(result["correct"], f"item {i}: {value}")
+
+    def test_number_word_parsing(self):
+        self.assertEqual(_parse_number("93"), 93)
+        self.assertEqual(_parse_number(" 93 "), 93)
+        self.assertEqual(_parse_number("93"), 93)
+        self.assertEqual(_parse_number("ninety three"), 93)
+        self.assertEqual(_parse_number("ninety-three"), 93)
+
+    def test_unparseable_scores_incorrect_never_errors(self):
+        result = evaluate_attention_serial7("1", "I don't know")
+        self.assertIsNotNone(result)
+        self.assertFalse(result["correct"])
+
+    def test_unknown_or_out_of_range_key_returns_none(self):
+        self.assertIsNone(evaluate_attention_serial7("99", "93"))
+        self.assertIsNone(evaluate_attention_serial7("abc", "93"))
+
+    def test_zero_key_maps_to_first_item(self):
+        result = evaluate_attention_serial7("0", "93")
+        self.assertIsNotNone(result)
+        self.assertTrue(result["correct"])
+
+
 class BatchRoutingTest(unittest.TestCase):
     """Tests that the batch endpoint routes orientation_time deterministically."""
 
@@ -157,13 +224,45 @@ class BatchRoutingTest(unittest.TestCase):
         self.assertEqual(len(outcome["errors"]), 0)
         call.assert_not_called()
 
-    def test_mixed_batch_excludes_orientation_from_model_prompt(self):
+    def test_serial7_items_never_call_provider(self):
+        items = {
+            f"attention_serial7.{i}": MMSEBatchItem(question="?", response=v, expected="")
+            for i, v in enumerate(SERIAL7_CORRECT, start=1)
+        }
+        req = MMSEEvaluateRequest(items=items)
+        with mock.patch.object(ai_eval, "_call_ollama") as call:
+            call.side_effect = AssertionError("provider must not be called")
+            outcome = evaluate_mmse_batch(req)
+        self.assertEqual(len(outcome["items"]), 5)
+        self.assertEqual(len(outcome["errors"]), 0)
+        call.assert_not_called()
+
+    def test_mixed_serial7_batch_scores_4_of_5(self):
+        items = {
+            f"attention_serial7.{i}": MMSEBatchItem(question="?", response=v, expected="")
+            for i, v in {1: "93", 2: "86", 3: "80", 4: "72", 5: "65"}.items()
+        }
+        req = MMSEEvaluateRequest(items=items)
+        with mock.patch.object(ai_eval, "_call_ollama") as call:
+            call.side_effect = AssertionError("provider must not be called")
+            outcome = evaluate_mmse_batch(req)
+        call.assert_not_called()
+        scores = [outcome["items"][f"attention_serial7.{i}"]["score"] for i in range(1, 6)]
+        self.assertEqual(scores, [1, 1, 0, 1, 1])
+        self.assertEqual(sum(scores), 4)
+
+    def test_mixed_batch_excludes_deterministic_from_model_prompt(self):
         answers = _correct_answers(datetime.now())
+        serial7 = {
+            f"attention_serial7.{i}": MMSEBatchItem(question="?", response=v, expected="")
+            for i, v in enumerate(SERIAL7_CORRECT, start=1)
+        }
         naming = {"naming.wristwatch": MMSEBatchItem(question="What is this?", response="watch", expected="wristwatch")}
         items = {
             f"orientation_time.{key}": MMSEBatchItem(question="?", response=resp, expected="")
             for key, resp in answers.items()
         }
+        items.update(serial7)
         items.update(naming)
         req = MMSEEvaluateRequest(items=items)
 
@@ -178,11 +277,12 @@ class BatchRoutingTest(unittest.TestCase):
 
         call.assert_called_once()
         self.assertNotIn("orientation_time", captured["prompt"])
+        self.assertNotIn("attention_serial7", captured["prompt"])
         self.assertIn("naming.wristwatch", captured["prompt"])
-        self.assertEqual(len(outcome["items"]), 6)
+        self.assertEqual(len(outcome["items"]), 11)  # 5 orientation + 5 serial7 + 1 naming
         self.assertEqual(len(outcome["errors"]), 0)
         for key in outcome["items"]:
-            if key.startswith("orientation_time."):
+            if key.startswith(("orientation_time.", "attention_serial7.")):
                 self.assertEqual(outcome["items"][key]["confidence"], 1.0)
 
     def test_missing_ai_result_becomes_per_item_error(self):
@@ -204,6 +304,17 @@ class BatchRoutingTest(unittest.TestCase):
         answers = _correct_answers(datetime.now())
         with mock.patch.object(ai_eval, "AI_PROVIDER", "none"):
             outcome = evaluate_mmse_batch(_batch(**answers))
+        self.assertEqual(len(outcome["items"]), 5)
+        self.assertEqual(len(outcome["errors"]), 0)
+
+    def test_serial7_only_succeeds_when_ai_disabled(self):
+        items = {
+            f"attention_serial7.{i}": MMSEBatchItem(question="?", response=v, expected="")
+            for i, v in enumerate(SERIAL7_CORRECT, start=1)
+        }
+        req = MMSEEvaluateRequest(items=items)
+        with mock.patch.object(ai_eval, "AI_PROVIDER", "none"):
+            outcome = evaluate_mmse_batch(req)
         self.assertEqual(len(outcome["items"]), 5)
         self.assertEqual(len(outcome["errors"]), 0)
 
@@ -229,7 +340,12 @@ class BatchRoutingTest(unittest.TestCase):
 
     def test_section_sets_are_disjoint_and_cover_deterministic(self):
         self.assertIn("orientation_time", DETERMINISTIC_SECTIONS)
+        self.assertIn("attention_serial7", DETERMINISTIC_SECTIONS)
         self.assertNotIn("orientation_time", ai_eval.AI_SECTIONS)
+        self.assertNotIn("attention_serial7", ai_eval.AI_SECTIONS)
+        self.assertTrue(
+            ai_eval.DETERMINISTIC_SECTIONS.isdisjoint(ai_eval.AI_SECTIONS)
+        )
 
 
 class ContractTest(unittest.TestCase):

@@ -55,7 +55,10 @@ from dotenv import load_dotenv
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from src.mmse_rules import evaluate_orientation_time
+from src.mmse_rules import (
+    evaluate_attention_serial7,
+    evaluate_orientation_time,
+)
 
 load_dotenv()
 
@@ -81,12 +84,17 @@ GEMINI_MAX_CONCURRENCY = max(1, int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
 # Sections scored deterministically on the backend (no AI provider). These are
 # excluded from AI_SECTIONS so they never reach the model.
-DETERMINISTIC_SECTIONS = {"orientation_time"}
+DETERMINISTIC_SECTIONS = {"orientation_time", "attention_serial7"}
+
+# Deterministic evaluator per section: (item_key, response) -> result dict|None.
+DETERMINISTIC_EVALUATORS = {
+    "orientation_time": evaluate_orientation_time,
+    "attention_serial7": evaluate_attention_serial7,
+}
 
 AI_SECTIONS = {
     "orientation_place",
     "registration",
-    "attention_serial7",
     "attention_spell_world",
     "delayed_recall",
     "naming",
@@ -175,13 +183,6 @@ def _prompt_for(section: str, item_key: str, question: str, response: str, expec
             f"The patient responded: \"{resp}\". "
             "Score 1 if the patient's response clearly refers to the same object "
             "(accept synonyms and slight wording differences)."
-        )
-    if section == "attention_serial7":
-        return (
-            f"MMSE — Serial-7s subtraction step {item_key}. Expected number: "
-            f"\"{expected}\". The patient said: \"{resp}\". "
-            "Score 1 only if the number is exactly the expected value. Do not "
-            "accept approximations or spelling-out of a different number."
         )
     if section == "attention_spell_world":
         return (
@@ -558,8 +559,9 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     ai_items: dict[str, MMSEBatchItem] = {}
     for key, entry in req.items.items():
         section, sep, item_key = key.partition(".")
-        if section in DETERMINISTIC_SECTIONS:
-            result = evaluate_orientation_time(item_key, entry.response)
+        evaluator = DETERMINISTIC_EVALUATORS.get(section)
+        if evaluator is not None:
+            result = evaluator(item_key, entry.response)
             if result is not None:
                 results[key] = result
             else:

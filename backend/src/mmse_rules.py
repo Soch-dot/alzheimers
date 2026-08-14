@@ -10,6 +10,13 @@ the five Orientation to Time items:
     orientation_time.day    -> current weekday (case-insensitive, full/abbrev)
     orientation_time.month  -> current month (case-insensitive, full/abbrev)
 
+The Serial-7s Attention & Calculation task is deterministic arithmetic:
+
+    attention_serial7.1..5 -> expected sequence 93, 86, 79, 72, 65 (one point
+                              each). Responses are parsed as numbers (digits,
+                              surrounding whitespace, or English number words
+                              such as "ninety-three") and compared exactly.
+
 Every response is normalized so equivalent representations are accepted
 (e.g. "2026"/"twenty twenty-six"/"two thousand twenty-six"; "13th"/"thirteen").
 Responses that cannot be matched score incorrect — never a per-item error — so
@@ -18,6 +25,11 @@ these items are fully deterministic and never depend on the AI provider.
 
 import re
 from datetime import datetime
+
+# ---------------------------------------------------------------------------
+# Serial-7s expected sequence (index 0 -> item 1). One point per item.
+# ---------------------------------------------------------------------------
+SERIAL_7_EXPECTED = (93, 86, 79, 72, 65)
 
 # ---------------------------------------------------------------------------
 # English number-word parsing (cardinal and ordinal forms)
@@ -101,10 +113,11 @@ def _parse_number(text: str) -> int | None:
     """Parse a plain number: digits, ordinal digits, or English words."""
     if not text:
         return None
-    digits = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", text)
+    t = _normalize(text)
+    digits = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", t)
     if digits.isdigit():
         return int(digits)
-    return _words_to_int(_tokenize(text))
+    return _words_to_int(_tokenize(t))
 
 
 def _parse_year(text: str) -> int | None:
@@ -220,6 +233,51 @@ def evaluate_orientation_time(item_key: str, response: str, now: datetime | None
     else:
         return None
 
+    return {
+        "correct": correct,
+        "score": 1 if correct else 0,
+        "confidence": 1.0,
+        "reason": reason,
+    }
+
+
+def evaluate_attention_serial7(item_key: str, response: str) -> dict | None:
+    """
+    Deterministically score one Serial-7s item (attention_serial7.1..5).
+
+    The expected sequence is 93, 86, 79, 72, 65 — pure arithmetic, so no AI
+    provider is involved. The patient's answer is parsed as a number (digits,
+    surrounding whitespace, or English number words such as "ninety-three")
+    and compared exactly against the expected value.
+
+    The frontend sends 1-indexed keys (`attention_serial7.1` .. `attention_serial7.5`
+    mapping to SERIAL_7_EXPECTED positions). Key "0" is accepted defensively as
+    the first item. Returns a validated result dict (confidence always 1.0) or
+    None for an unknown item key. Unparseable responses score incorrect (never
+    a per-item error, never sent to AI).
+    """
+    key = (item_key or "").strip()
+    resp = (response or "").strip()
+
+    try:
+        index = int(key)
+    except (TypeError, ValueError):
+        return None
+    if index == 0:
+        position = 0
+    elif 1 <= index <= len(SERIAL_7_EXPECTED):
+        position = index - 1
+    else:
+        return None
+
+    expected = SERIAL_7_EXPECTED[position]
+    value = _parse_number(resp)
+    correct = value is not None and value == expected
+    reason = (
+        f"Matches expected serial-7 result ({expected})."
+        if correct
+        else f"Expected {expected}."
+    )
     return {
         "correct": correct,
         "score": 1 if correct else 0,
