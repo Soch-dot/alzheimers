@@ -443,6 +443,8 @@ alzheimers_ml_project/
 | 2026-08-14 | `f445042` | `docs: record deterministic orientation scoring commit hash` | Deterministic scoring docs |
 | 2026-08-14 | `595d95c` | `fix(mmse): score serial seven deterministically` | Serial-7s arithmetic is deterministic, never AI |
 | 2026-08-14 | `e9f326b` | `docs: record serial seven scoring commit hash` | Serial-7 deterministic scoring docs |
+| 2026-08-14 | `d717ad3` | `perf(mmse): expand deterministic scoring coverage` | Hybrid MMSE scoring: 29/30 items deterministic, only writing + ambiguous → AI |
+| 2026-08-14 | (next) | `docs: record deterministic coverage commit hash` | Expanded deterministic coverage docs |
 
 ---
 
