@@ -15,11 +15,11 @@ import {
 
 function App() {
   const [formData, setFormData] = useState<PatientInput>({
-    age: 70,
+    age: 0,
     sex: 1,
-    education_years: 12,
+    education_years: 0,
     mmse: 0,
-    ses: 2,
+    ses: 0,
   });
 
   const [phase, setPhase] = useState<'details' | 'mmse' | 'form'>('details');
@@ -51,11 +51,11 @@ function App() {
     setResult(null);
     setError(null);
     setFormData({
-      age: 70,
+      age: 0,
       sex: 1,
-      education_years: 12,
+      education_years: 0,
       mmse: 0,
-      ses: 2,
+      ses: 0,
     });
   };
 

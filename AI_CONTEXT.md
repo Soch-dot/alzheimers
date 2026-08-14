@@ -296,7 +296,7 @@ alzheimers_ml_project/
 - **Frontend state:** `src/mmse/state.ts` (`MMSEState` + `createInitialMMSEState`). `ItemState { response, status, aiScore, reviewRequired, reviewed, manual, error }` keeps response text separate from the score. `effectiveCorrect()` = manual verdict wins over AI; `isItemFinalized()` gates section completion (AI finalized unless low-confidence-unreviewed). `MmsePhase = collect | assessing | assessed | error` drives the two-phase UI. `MMSEState.location` holds the examiner-configured assessment location (reference answers for Orientation to Place). Q11 uses a dedicated `CopyingState { status: empty|photo|analyzing|assessed|error, previewData, previewName, aiScore, reviewRequired, reviewed, manual, errorKind, errorDetail }`; `copyingEffective()`/`isCopyingFinalized()` mirror the ItemState helpers. `previewData` is an in-memory data URL — never persisted.
 - **Speech capture:** `useSpeechRecognition()` in `primitives.tsx` uses the native Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`), no new dependency. A transcript only populates the response field — it never triggers AI. Unsupported browsers degrade to typing with a notice.
 - **Flow to the API:** Assessment Details (pre-MMSE, `App.tsx` 'details' phase) → MMSE → MMSE Summary → "Continue to Analysis" → `MMSEAssessment.onComplete(total)` → `App.handleMmseComplete` sets `formData.mmse = total` → Analysis screen (read-only demographics + MMSE score + Analyze) → existing `predictAlzheimers()` → `POST /predict`.
-- **Assessment Details step:** first screen of the flow (`phase === 'details'`). Collects Age (50–100), Sex (Male=1/Female=0), Education years (0–25), SES (1–5) using the same `InputField`/`SelectField` components and field semantics as the original post-MMSE form. `[ Continue to MMSE ]` (in `AssessmentDetails.tsx`) stays disabled until every field is within range; the MMSE cannot be started with missing/invalid details. Values are stored in App-level `formData` and preserved across forward/backward navigation through the whole flow. On the Analysis screen they appear as a read-only summary (`Age / Sex / Education / SES`), not editable inputs. "Restart Assessment" (`handleRestart`) resets them to defaults and returns to the 'details' phase.
+- **Assessment Details step:** first screen of the flow (`phase === 'details'`). Collects Age (50–100), Sex (Male=1/Female=0), Education years (0–25), SES (1–5) using the same `InputField`/`SelectField` components and field semantics as the original post-MMSE form. The form starts with neutral/invalid defaults (`age 0, ses 0`) so the `[ Continue to MMSE ]` button stays disabled until every field is within range; the MMSE cannot be started with missing/invalid details. Values are stored in App-level `formData` and preserved across forward/backward navigation through the whole flow. On the Analysis screen they appear as a read-only summary (`Age / Sex / Education / SES`), not editable inputs. "Restart Assessment" (`handleRestart`) resets them to the same neutral defaults and returns to the 'details' phase.
 - **Navigation:** "MMSE Assessment · X of 11" progress bar, Back/Next; during Phase 1 Next is enabled once the section's responses are complete (`isSectionResponseComplete`); after assessment it requires finalized scores (`isSectionComplete`); navigation is locked while the batch runs. Answers persist when navigating back.
 - **Right panel during MMSE phase:** `EmptyState` accepts optional `title`/`description`/`showAnalyze` props; during the MMSE phase `App.tsx` renders a contextual variant ("MMSE Assessment / Complete the assessment to generate your screening result.") with the Analyze button hidden so the panel doesn't look disconnected from the assessment flow.
 - **Reference figure:** The exact figure asset is **not bundled**. `COPYING_REFERENCE_IMAGE` in `config.ts` is empty and a placeholder is shown until the asset is supplied. Do NOT substitute a generic pentagon.
@@ -444,7 +444,7 @@ alzheimers_ml_project/
 | 2026-08-14 | `595d95c` | `fix(mmse): score serial seven deterministically` | Serial-7s arithmetic is deterministic, never AI |
 | 2026-08-14 | `e9f326b` | `docs: record serial seven scoring commit hash` | Serial-7 deterministic scoring docs |
 | 2026-08-14 | `d717ad3` | `perf(mmse): expand deterministic scoring coverage` | Hybrid MMSE scoring: 29/30 items deterministic, only writing + ambiguous → AI |
-| 2026-08-14 | (next) | `docs: record deterministic coverage commit hash` | Expanded deterministic coverage docs |
+| 2026-08-14 | `2b0dc75` | `docs: record deterministic coverage commit hash` | Expanded deterministic coverage docs |
 
 ---
 
@@ -599,14 +599,20 @@ alzheimers_ml_project/
 - `4fdc6fe` — `feat(mmse): add q11 vision evaluation service`
 - `177c62f` — `fix(mmse): reject blank q11 submissions before vision`
 - `ee64a7c` — `feat(mmse): add q11 photo assessment ui`
-- (next) — `feat(ui): collect assessment details before mmse`
+- `cb2b7f0` — `feat(ui): collect assessment details before mmse`
+- `9345169` — `docs: record assessment details before mmse commit hash`
+- `0c97278` — `fix(mmse): correct deterministic orientation scoring`
+- `f445042` — `docs: record deterministic orientation scoring commit hash`
+- `595d95c` — `fix(mmse): score serial seven deterministically`
+- `e9f326b` — `docs: record serial seven scoring commit hash`
+- `d717ad3` — `perf(mmse): expand deterministic scoring coverage`
+- `2b0dc75` — `docs: record deterministic coverage commit hash`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `ee64a7c` (Q11 UI milestone).
-- Assessment Details milestone: to be committed and pushed as `feat(ui): collect assessment details before mmse` + docs record.
+- Pushed to `origin/main` successfully through `2b0dc75` (deterministic coverage milestone).
 
 ### Important Warnings
-- Assessment Details values live only in App-level `formData` (React state) — never persisted server-side. `handleRestart` resets them to defaults; do not persist demographics anywhere (no localStorage/backend storage added).
+- Assessment Details values live only in App-level `formData` (React state) — never persisted server-side. `handleRestart` resets them to neutral defaults (age 0, ses 0, etc.); do not persist demographics anywhere (no localStorage/backend storage added). The defaults are deliberately invalid so `[ Continue to MMSE ]` starts disabled until the examiner enters valid values — do NOT pre-fill the example test values (70/Male/12/2) into the app.
 - Assessment Details uses the SAME field semantics/ranges as the original form (Age 50–100, Education 0–25, SES 1–5, Sex 1=Male/0=Female). The `/predict` payload must stay exactly `{age, sex, education_years, mmse, ses}` — do not add fields or change order.
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
 - Q11 blank/near-blank submissions are rejected deterministically BEFORE any vision provider call (HTTP 400, `has_drawing_content` in `vision_image.py`). This fixes the earlier blank-canvas false-positive. The gate is conservative (0.5% ink / 20 gray-level delta) so faint-but-visible drawings pass — do NOT tighten it without explicit instruction or you will over-reject legitimate faint pencil drawings.
