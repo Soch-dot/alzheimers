@@ -440,7 +440,8 @@ alzheimers_ml_project/
 | 2026-08-13 | `9345169` | `docs: record assessment details before mmse commit hash` | Assessment Details docs |
 | 2026-08-14 | `0c97278` | `fix(mmse): correct deterministic orientation scoring` | Orientation to Time is deterministic, never AI |
 | 2026-08-14 | `f445042` | `docs: record deterministic orientation scoring commit hash` | Deterministic scoring docs |
-| 2026-08-14 | (next) | `fix(mmse): score serial seven deterministically` | Serial-7s arithmetic is deterministic, never AI |
+| 2026-08-14 | `595d95c` | `fix(mmse): score serial seven deterministically` | Serial-7s arithmetic is deterministic, never AI |
+| 2026-08-14 | (next) | `docs: record serial seven scoring commit hash` | Serial-7 deterministic scoring docs |
 
 ---
 
