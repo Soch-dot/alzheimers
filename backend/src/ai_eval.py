@@ -56,8 +56,15 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from src.mmse_rules import (
+    AMBIGUOUS,
     evaluate_attention_serial7,
+    evaluate_attention_spell_world,
+    evaluate_delayed_recall,
+    evaluate_naming,
+    evaluate_orientation_place,
     evaluate_orientation_time,
+    evaluate_registration,
+    evaluate_repetition,
 )
 
 load_dotenv()
@@ -82,20 +89,35 @@ OLLAMA_BATCH_TIMEOUT = float(os.getenv("OLLAMA_BATCH_TIMEOUT", "175"))
 OLLAMA_MAX_CONCURRENCY = max(1, int(os.getenv("OLLAMA_MAX_CONCURRENCY", "1")))
 GEMINI_MAX_CONCURRENCY = max(1, int(os.getenv("GEMINI_MAX_CONCURRENCY", "8")))
 
-# Sections scored deterministically on the backend (no AI provider). These are
-# excluded from AI_SECTIONS so they never reach the model.
-DETERMINISTIC_SECTIONS = {"orientation_time", "attention_serial7"}
-
-# Deterministic evaluator per section: (item_key, response) -> result dict|None.
+# Sections with a deterministic evaluator. Evaluators return a result dict, or
+# the AMBIGUOUS sentinel to route that single item to the AI provider, or None
+# for an unknown/unsupported item key.
 DETERMINISTIC_EVALUATORS = {
     "orientation_time": evaluate_orientation_time,
     "attention_serial7": evaluate_attention_serial7,
+    "attention_spell_world": evaluate_attention_spell_world,
+    "orientation_place": evaluate_orientation_place,
+    "registration": evaluate_registration,
+    "delayed_recall": evaluate_delayed_recall,
+    "naming": evaluate_naming,
+    "repetition": evaluate_repetition,
 }
 
+DETERMINISTIC_SECTIONS = set(DETERMINISTIC_EVALUATORS)
+
+# Sections that can NEVER reach the AI provider (fully deterministic).
+FULLY_DETERMINISTIC_SECTIONS = {
+    "orientation_time",
+    "attention_serial7",
+    "attention_spell_world",
+}
+
+# Sections that MAY be sent to the AI provider: the fully-AI "writing" section
+# plus the hybrid sections whose deterministic rule returned AMBIGUOUS for that
+# specific item.
 AI_SECTIONS = {
     "orientation_place",
     "registration",
-    "attention_spell_world",
     "delayed_recall",
     "naming",
     "repetition",
@@ -183,13 +205,6 @@ def _prompt_for(section: str, item_key: str, question: str, response: str, expec
             f"The patient responded: \"{resp}\". "
             "Score 1 if the patient's response clearly refers to the same object "
             "(accept synonyms and slight wording differences)."
-        )
-    if section == "attention_spell_world":
-        return (
-            f"MMSE — spelling WORLD backwards, letter position {item_key}. "
-            f"Expected letter: \"{expected}\". The patient provided: \"{resp}\" "
-            "for this position. Score 1 only if the letter matches exactly "
-            "(case-insensitive)."
         )
     if section == "naming":
         return (
@@ -536,10 +551,12 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     """
     Evaluate a batch of MMSE responses.
 
-    Deterministic sections (see DETERMINISTIC_SECTIONS) are scored server-side
-    with NO AI provider call. Only the remaining items reach the provider:
-    Ollama uses ONE model generation for the whole AI batch; Gemini keeps
-    per-item parallel evaluation. Returns
+    Deterministic sections (see DETERMINISTIC_EVALUATORS) are scored server-side
+    with NO AI provider call, except that an evaluator returning the AMBIGUOUS
+    sentinel routes ONLY that item to the provider. Only genuinely ambiguous
+    items and the AI-only sections reach the provider: Ollama uses ONE model
+    generation for the small AI batch; Gemini keeps per-item parallel
+    evaluation. Returns
     {"items": {key: result}, "errors": {key: message}}. Raises:
       503 when AI is disabled or the provider is unreachable for every item
           (only relevant when the request actually contains AI-evaluated items);
@@ -554,16 +571,24 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
     provider_failures = 0
 
     # Split the batch: deterministic items are scored first without any AI
-    # provider involvement. Only the remaining (AI-required) items are sent to
-    # the model, so the actual model payload never contains deterministic keys.
+    # provider involvement. An evaluator returns either a result dict, the
+    # AMBIGUOUS sentinel (route only that item to AI), or None (invalid key).
+    # The actual model payload therefore contains only genuinely ambiguous and
+    # AI-only items — never fully-deterministic keys.
     ai_items: dict[str, MMSEBatchItem] = {}
+    deterministic_count = 0
+    ambiguous_count = 0
     for key, entry in req.items.items():
         section, sep, item_key = key.partition(".")
         evaluator = DETERMINISTIC_EVALUATORS.get(section)
         if evaluator is not None:
-            result = evaluator(item_key, entry.response)
-            if result is not None:
+            result = evaluator(item_key, entry.response, entry.expected)
+            if isinstance(result, dict):
                 results[key] = result
+                deterministic_count += 1
+            elif result is AMBIGUOUS:
+                ai_items[key] = entry
+                ambiguous_count += 1
             else:
                 errors[key] = (
                     f"Unsupported deterministic item key: {key!r}"
@@ -602,13 +627,11 @@ def evaluate_mmse_batch(req: MMSEEvaluateRequest) -> dict:
         provider_failures = ai_failures
 
     elapsed = time.perf_counter() - t0
-    deterministic_count = sum(
-        1 for key in req.items if key.partition(".")[0] in DETERMINISTIC_SECTIONS
-    )
     # Development-side timing only (backend log; never shown in the UI).
     print(
         f"[ai_eval] AI_PROVIDER={AI_PROVIDER} items={len(req.items)} "
-        f"(deterministic={deterministic_count}, ai={len(ai_items)}) "
+        f"(deterministic={deterministic_count}, ambiguous={ambiguous_count}, "
+        f"ai={len(ai_items)}) "
         f"provider_calls={1 if AI_PROVIDER == 'ollama' and ai_items else len(ai_items)} "
         f"elapsed={elapsed:.2f}s results={len(results)} errors={len(errors)}",
         flush=True,
