@@ -445,6 +445,7 @@ alzheimers_ml_project/
 | 2026-08-14 | `e9f326b` | `docs: record serial seven scoring commit hash` | Serial-7 deterministic scoring docs |
 | 2026-08-14 | `d717ad3` | `perf(mmse): expand deterministic scoring coverage` | Hybrid MMSE scoring: 29/30 items deterministic, only writing + ambiguous → AI |
 | 2026-08-14 | `2b0dc75` | `docs: record deterministic coverage commit hash` | Expanded deterministic coverage docs |
+| 2026-08-14 | `e6fd581` | `fix(ui): start assessment details empty` | Neutral/invalid defaults so Continue is disabled until valid |
 
 ---
 
@@ -607,9 +608,11 @@ alzheimers_ml_project/
 - `e9f326b` — `docs: record serial seven scoring commit hash`
 - `d717ad3` — `perf(mmse): expand deterministic scoring coverage`
 - `2b0dc75` — `docs: record deterministic coverage commit hash`
+- `e6fd581` — `fix(ui): start assessment details empty`
 
 ### Push Status
 - Pushed to `origin/main` successfully through `2b0dc75` (deterministic coverage milestone).
+- `e6fd581` — `fix(ui): start assessment details empty` — pending push with its docs record.
 
 ### Important Warnings
 - Assessment Details values live only in App-level `formData` (React state) — never persisted server-side. `handleRestart` resets them to neutral defaults (age 0, ses 0, etc.); do not persist demographics anywhere (no localStorage/backend storage added). The defaults are deliberately invalid so `[ Continue to MMSE ]` starts disabled until the examiner enters valid values — do NOT pre-fill the example test values (70/Male/12/2) into the app.
