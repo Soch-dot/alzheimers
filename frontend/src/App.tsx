@@ -61,9 +61,14 @@ function App() {
   }, []);
 
   // Persist mode + details whenever they change (after the initial restore).
+  // Only VALID details are persisted: the restore path ignores invalid drafts
+  // (loadStoredDetails), so saving an empty/invalid draft would only leave a
+  // stale key behind after "Re-take Assessment" clears it.
   const storedDetails: StoredDetails = { mode, ...details };
   useEffect(() => {
-    saveStoredDetails(storedDetails);
+    if (detailsValid(details)) {
+      saveStoredDetails(storedDetails);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, details]);
 

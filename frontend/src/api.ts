@@ -91,12 +91,11 @@ export interface CopyingEvaluateResponse {
 }
 
 /**
- * Frontend timeout (ms) for the Q11 vision endpoint. Kept comfortably above the
- * backend VISION_TIMEOUT (120s) because the local vision model can take up to
- * ~2 minutes. This is the Q11-only budget — the text-MMSE batch keeps its own
- * separate timeout (see `evaluateMmseBatch`).
+ * Frontend timeout (ms) for the Q11 vision endpoint. This is the Q11-only
+ * budget — the text-MMSE batch keeps its own separate timeout (see
+ * `evaluateMmseBatch`). Mirrors the backend `VISION_TIMEOUT` default.
  */
-export const VISION_CLIENT_TIMEOUT = 150000;
+export const VISION_CLIENT_TIMEOUT = 120000;
 
 export const evaluateCopyingImage = async (
   imageDataUrl: string,
