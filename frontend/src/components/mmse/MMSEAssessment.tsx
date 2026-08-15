@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { MMSEState, MmsePhase, SectionId } from '../../mmse/state';
 import {
@@ -37,6 +37,14 @@ import {
 
 interface MMSEAssessmentProps {
   onComplete: (totalScore: number) => void;
+  /** Restored step (0 = intro, 1..11 = sections, 12 = summary). */
+  initialStep?: number;
+  /** Restored MMSE phase. */
+  initialPhase?: MmsePhase;
+  /** Restored response/AI state for the in-progress session. */
+  initialState?: MMSEState;
+  /** Reports the current MMSE position/state so the session can be persisted. */
+  onSessionStateChange?: (step: number, phase: MmsePhase, state: MMSEState) => void;
 }
 
 const SECTION_COMPONENTS: Record<SectionId, React.FC<SectionProps>> = {
@@ -63,11 +71,29 @@ export interface BatchErrorInfo {
   detail: string | null;
 }
 
-export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) => {
-  const [step, setStep] = useState(INTRO_STEP);
-  const [state, setState] = useState<MMSEState>(createInitialMMSEState);
-  const [phase, setPhase] = useState<MmsePhase>('collect');
+export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
+  onComplete,
+  initialStep,
+  initialPhase,
+  initialState,
+  onSessionStateChange,
+}) => {
+  const [step, setStep] = useState(initialStep ?? INTRO_STEP);
+  const [state, setState] = useState<MMSEState>(
+    initialState ?? createInitialMMSEState
+  );
+  const [phase, setPhase] = useState<MmsePhase>(initialPhase ?? 'collect');
   const [batchError, setBatchError] = useState<BatchErrorInfo | null>(null);
+
+  // Debounce persistence of the MMSE position/state so typing does not write on
+  // every keystroke, while a refresh still restores the latest meaningful state.
+  useEffect(() => {
+    if (!onSessionStateChange) return;
+    const timer = window.setTimeout(() => {
+      onSessionStateChange(step, phase, state);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [step, phase, state, onSessionStateChange]);
 
   // Shared "go to next section" path used by BOTH the Next button and the Enter
   // key (see SectionNavigationContext / PatientResponseInput). Enter must not

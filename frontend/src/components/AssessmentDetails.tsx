@@ -9,6 +9,8 @@ interface AssessmentDetailsProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onBack: () => void;
   onContinue: () => void;
+  /** Full session reset — clears everything and returns to Assessment Mode. */
+  onRestart: () => void;
 }
 
 /**
@@ -27,6 +29,7 @@ export const AssessmentDetails: React.FC<AssessmentDetailsProps> = ({
   onChange,
   onBack,
   onContinue,
+  onRestart,
 }) => {
   const valid = detailsValid(formData);
 
@@ -46,13 +49,22 @@ export const AssessmentDetails: React.FC<AssessmentDetailsProps> = ({
             Enter the information required for the risk assessment.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-sm text-gray-400 hover:text-white transition-colors shrink-0"
-        >
-          ← Back
-        </button>
+        <div className="flex items-center gap-4 shrink-0">
+          <button
+            type="button"
+            onClick={onRestart}
+            className="text-sm text-gray-500 hover:text-rose-300 transition-colors"
+          >
+            Restart Assessment
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            ← Back
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-7">

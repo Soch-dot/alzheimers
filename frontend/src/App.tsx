@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PredictionResponse } from './api';
 import { predictAlzheimers } from './api';
@@ -18,17 +18,20 @@ import type { AssessmentMode } from './mmse/mode';
 import { DEFAULT_ASSESSMENT_MODE } from './mmse/mode';
 import {
   EMPTY_DETAILS,
-  clearStoredDetails,
   detailsToPatientInput,
   detailsValid,
-  loadStoredDetails,
   sanitizeNumericInput,
-  saveStoredDetails,
   type DetailsDraft,
-  type StoredDetails,
 } from './mmse/details';
-
-type Phase = 'mode' | 'details' | 'mmse' | 'form';
+import type { MMSEState, MmsePhase } from './mmse/state';
+import {
+  clearSession,
+  loadSession,
+  saveSession,
+  SESSION_VERSION,
+  type AppPhase,
+  type MmseSessionPart,
+} from './mmse/session';
 
 function App() {
   // ------------------ Assessment Mode (first step, persisted) -------------
@@ -37,40 +40,66 @@ function App() {
   // ------------------ Assessment Details (string-based, persisted) --------
   const [details, setDetails] = useState<DetailsDraft>(EMPTY_DETAILS);
 
-  const [phase, setPhase] = useState<Phase>('mode');
+  const [phase, setPhase] = useState<AppPhase>('mode');
   const [mmseScore, setMmseScore] = useState<number | null>(null);
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore persisted mode + details on first load. Only approved fields are
-  // ever read back (mode, age, sex, education_years, ses).
+  // In-progress MMSE position (step / collect-assess phase / full response
+  // state). Set by MMSEAssessment via onSessionStateChange.
+  const [mmse, setMmse] = useState<MmseSessionPart | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // THE single authoritative startup restore. Reads the versioned session and
+  // restores the exact logical location (mode, details, phase, MMSE step,
+  // score, prediction). A single effect makes the one startup decision so no
+  // other effect can fight it. `restored` gates the save effect until the
+  // restore has landed (avoids immediately overwriting the restored session).
   useEffect(() => {
-    const stored = loadStoredDetails();
-    if (stored) {
-      setMode(stored.mode);
-      setDetails({
-        age: stored.age,
-        sex: stored.sex,
-        education_years: stored.education_years,
-        ses: stored.ses,
-      });
-      setPhase('details');
+    const session = loadSession();
+    if (session) {
+      setMode(session.mode);
+      setDetails(session.details);
+      setPhase(session.appPhase);
+      setMmseScore(session.mmseScore);
+      setResult(session.result);
+      setMmse(session.mmse);
     }
+    setRestored(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist mode + details whenever they change (after the initial restore).
-  // Only VALID details are persisted: the restore path ignores invalid drafts
-  // (loadStoredDetails), so saving an empty/invalid draft would only leave a
-  // stale key behind after "Re-take Assessment" clears it.
-  const storedDetails: StoredDetails = { mode, ...details };
+  // Persist the whole session whenever meaningful state changes. Debounced so
+  // text-entry churn (details + MMSE responses) does not write on every
+  // keystroke; a refresh still restores the latest meaningful state.
+  // A completely empty session (fresh start / after full "Restart Assessment")
+  // is NOT re-written, so the cleared key stays gone.
+  const isEmptySession =
+    phase === 'mode' &&
+    mode === DEFAULT_ASSESSMENT_MODE &&
+    details.age === '' &&
+    details.sex === '' &&
+    details.education_years === '' &&
+    details.ses === '' &&
+    mmse === null &&
+    mmseScore === null &&
+    result === null;
   useEffect(() => {
-    if (detailsValid(details)) {
-      saveStoredDetails(storedDetails);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, details]);
+    if (!restored || isEmptySession) return;
+    const timer = window.setTimeout(() => {
+      saveSession({
+        version: SESSION_VERSION,
+        mode,
+        details,
+        appPhase: phase,
+        mmse,
+        mmseScore,
+        result,
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [restored, isEmptySession, mode, details, phase, mmse, mmseScore, result]);
 
   const handleDetailsChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -92,10 +121,40 @@ function App() {
     setPhase('form');
   };
 
+  const handleMmseStateChange = useCallback(
+    (step: number, phase: MmsePhase, state: MMSEState) => {
+      setMmse({ step, phase, state });
+    },
+    []
+  );
+
+  // "Re-take Assessment": clear MMSE-specific state (responses, step, AI
+  // results, score), PRESERVE the selected mode and assessment details, and
+  // return to the MMSE intro. This must NOT erase the whole session.
+  const handleRetake = () => {
+    setMmse(null);
+    setMmseScore(null);
+    setResult(null);
+    setPhase('mmse');
+    // Flush immediately so an instant refresh also lands on the fresh MMSE intro.
+    saveSession({
+      version: SESSION_VERSION,
+      mode,
+      details,
+      appPhase: 'mmse',
+      mmse: null,
+      mmseScore: null,
+      result: null,
+    });
+  };
+
+  // "Restart Assessment": clear the FULL persisted session and return to
+  // Assessment Mode. Verified by a refresh landing on Assessment Mode.
   const handleRestart = () => {
-    clearStoredDetails();
+    clearSession();
     setMode(DEFAULT_ASSESSMENT_MODE);
     setDetails(EMPTY_DETAILS);
+    setMmse(null);
     setPhase('mode');
     setMmseScore(null);
     setResult(null);
@@ -169,9 +228,16 @@ function App() {
                   onChange={handleDetailsChange}
                   onBack={() => setPhase('mode')}
                   onContinue={() => setPhase('mmse')}
+                  onRestart={handleRestart}
                 />
               ) : phase === 'mmse' ? (
-                <MMSEAssessment onComplete={handleMmseComplete} />
+                <MMSEAssessment
+                  onComplete={handleMmseComplete}
+                  initialStep={mmse?.step}
+                  initialPhase={mmse?.phase}
+                  initialState={mmse?.state}
+                  onSessionStateChange={handleMmseStateChange}
+                />
               ) : (
                 <FormPanel onSubmit={handleSubmit}>
                   <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-7 flex items-center justify-between gap-4">
@@ -185,10 +251,17 @@ function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={handleRestart}
+                      onClick={handleRetake}
                       className="text-sm text-gray-400 hover:text-white transition-colors"
                     >
                       Re-take Assessment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRestart}
+                      className="text-sm text-gray-500 hover:text-rose-300 transition-colors"
+                    >
+                      Restart Assessment
                     </button>
                   </div>
 
