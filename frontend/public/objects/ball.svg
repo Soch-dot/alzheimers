@@ -1,7 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round">
-  <circle cx="100" cy="100" r="62"/>
-  <path d="M100 38a98 98 0 0 1 0 124"/>
-  <path d="M100 38a98 98 0 0 0 0 124"/>
-  <path d="M100 38a62 62 0 0 1 0 124"/>
-  <path d="M100 38a62 62 0 0 0 0 124"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Ball: white baseball with two red stitched seams -->
+  <circle cx="512" cy="512" r="348" fill="#f8fafc" stroke="#1f2937" stroke-width="14"/>
+  <path d="M298 366 C 430 468 560 556 726 656" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round"/>
+  <path d="M726 366 C 594 468 464 556 298 656" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round"/>
+  <g stroke="#dc2626" stroke-width="9" stroke-linecap="round">
+    <line x1="404" y1="450" x2="416" y2="466"/>
+    <line x1="470" y1="512" x2="484" y2="528"/>
+    <line x1="534" y1="578" x2="548" y2="594"/>
+    <line x1="620" y1="446" x2="608" y2="462"/>
+    <line x1="554" y1="510" x2="540" y2="526"/>
+    <line x1="490" y1="576" x2="476" y2="592"/>
+  </g>
 </svg>

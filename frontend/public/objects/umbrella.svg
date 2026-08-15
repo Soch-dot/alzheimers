@@ -1,6 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M30 95c25-28 45 22 70-6s50 8 70-18"/>
-  <path d="M30 95l90-20"/>
-  <path d="M120 75c-14 35 10 90 10 90s40-45 40-85"/>
-  <path d="M120 75c8 22 26 40 50 40"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Umbrella: scalloped canopy, central shaft, J-hook handle -->
+  <path d="M512 214 C 732 214 882 320 882 470 L 802 470 Q 762 505 722 470 Q 682 505 642 470 Q 602 505 562 470 Q 522 505 482 470 Q 442 505 402 470 Q 362 505 322 470 Q 282 505 242 470 Q 202 505 162 470 L 142 470 C 142 320 292 214 512 214 Z" fill="#dc2626" stroke="#1f2937" stroke-width="14" stroke-linejoin="round"/>
+  <g stroke="#991b1b" stroke-width="10" stroke-linecap="round">
+    <line x1="512" y1="214" x2="322" y2="470"/>
+    <line x1="512" y1="214" x2="482" y2="470"/>
+    <line x1="512" y1="214" x2="562" y2="470"/>
+    <line x1="512" y1="214" x2="722" y2="470"/>
+  </g>
+  <circle cx="512" cy="196" r="18" fill="#4b5563" stroke="#1f2937" stroke-width="8"/>
+  <line x1="512" y1="214" x2="512" y2="866" stroke="#1f2937" stroke-width="36" stroke-linecap="round"/>
+  <line x1="512" y1="214" x2="512" y2="866" stroke="#4b5563" stroke-width="24" stroke-linecap="round"/>
+  <path d="M512 866 C 512 908 496 930 470 930 C 442 930 444 902 464 894" fill="none" stroke="#1f2937" stroke-width="44" stroke-linecap="round"/>
+  <path d="M512 866 C 512 904 498 922 472 922 C 450 922 452 900 468 894" fill="none" stroke="#4b5563" stroke-width="30" stroke-linecap="round"/>
 </svg>

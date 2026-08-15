@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="70" cy="92" r="40"/>
-  <path d="M96 108 176 28l-8-8"/>
-  <path d="M152 44l16 16"/>
-  <path d="M130 66l16 16"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Key: round bow with hole, shoulder, shaft with two teeth -->
+  <path fill-rule="evenodd" d="M330 252 a138 138 0 1 0 0 276 a138 138 0 1 0 0 -276 Z M330 336 a54 54 0 1 1 0 108 a54 54 0 1 1 0 -108 Z" fill="#fbbf24" stroke="#1f2937" stroke-width="12"/>
+  <rect x="430" y="320" width="82" height="140" rx="20" fill="#fbbf24" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M500 346 H790 Q810 346 810 364 V412 H756 V460 H702 V412 H640 V460 H586 V412 H556 V364 Q556 346 574 346 H500 Z" fill="#fbbf24" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
 </svg>

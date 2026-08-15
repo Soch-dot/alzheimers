@@ -1,5 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M82 100v-38a18 18 0 0 1 36 0v38"/>
-  <path d="M118 100v60a18 18 0 0 1-18 18h0a18 18 0 0 1-18-18v-60"/>
-  <path d="M64 40l18-18 18 18M100 40l18-18 18 18"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Fork: handle, neck, four tines -->
+  <rect x="470" y="560" width="84" height="300" rx="40" fill="#d1d5db" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M470 560 L442 486 L582 486 L554 560 Z" fill="#d1d5db" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <rect x="392" y="428" width="240" height="58" rx="14" fill="#d1d5db" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <g stroke="#1f2937" stroke-width="10">
+    <rect x="420" y="248" width="22" height="182" rx="11" fill="#d1d5db"/>
+    <rect x="482" y="248" width="22" height="182" rx="11" fill="#d1d5db"/>
+    <rect x="542" y="248" width="22" height="182" rx="11" fill="#d1d5db"/>
+    <rect x="604" y="248" width="22" height="182" rx="11" fill="#d1d5db"/>
+  </g>
 </svg>

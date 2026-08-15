@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M40 40h90v130h-90z"/>
-  <path d="M130 40h30v130h-30"/>
-  <path d="M50 70h70M50 100h70M50 130h70"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Book: red cover, spine on the left, white page block on the right -->
+  <rect x="306" y="280" width="46" height="480" rx="12" fill="#991b1b" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <rect x="330" y="274" width="378" height="492" rx="10" fill="#dc2626" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <rect x="368" y="398" width="300" height="40" rx="8" fill="#fca5a5"/>
+  <rect x="368" y="470" width="190" height="24" rx="7" fill="#f87171"/>
+  <rect x="708" y="284" width="36" height="472" fill="#f8fafc" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <g stroke="#9ca3af" stroke-width="5">
+    <line x1="716" y1="340" x2="736" y2="340"/>
+    <line x1="716" y1="440" x2="736" y2="440"/>
+    <line x1="716" y1="540" x2="736" y2="540"/>
+    <line x1="716" y1="640" x2="736" y2="640"/>
+  </g>
 </svg>

@@ -1,8 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="70" cy="70" r="22"/>
-  <circle cx="130" cy="70" r="22"/>
-  <path d="M48 70l-30 60"/>
-  <path d="M92 70l-14 60"/>
-  <path d="M108 70l14 60"/>
-  <path d="M152 70l30 60"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Scissors: red + blue finger loops, silver crossed blades, pivot -->
+  <line x1="496" y1="478" x2="272" y2="890" stroke="#1f2937" stroke-width="58" stroke-linecap="round"/>
+  <line x1="496" y1="478" x2="272" y2="890" stroke="#d1d5db" stroke-width="42" stroke-linecap="round"/>
+  <line x1="528" y1="478" x2="752" y2="890" stroke="#1f2937" stroke-width="58" stroke-linecap="round"/>
+  <line x1="528" y1="478" x2="752" y2="890" stroke="#d1d5db" stroke-width="42" stroke-linecap="round"/>
+  <line x1="336" y1="398" x2="468" y2="478" stroke="#1f2937" stroke-width="84" stroke-linecap="round"/>
+  <line x1="336" y1="398" x2="468" y2="478" stroke="#d1d5db" stroke-width="66" stroke-linecap="round"/>
+  <line x1="688" y1="398" x2="556" y2="478" stroke="#1f2937" stroke-width="84" stroke-linecap="round"/>
+  <line x1="688" y1="398" x2="556" y2="478" stroke="#d1d5db" stroke-width="66" stroke-linecap="round"/>
+  <path fill-rule="evenodd" d="M330 196 a104 104 0 1 0 0 208 a104 104 0 1 0 0 -208 Z M330 254 a46 46 0 1 1 0 92 a46 46 0 1 1 0 -92 Z" fill="#ef4444" stroke="#1f2937" stroke-width="14"/>
+  <path fill-rule="evenodd" d="M694 196 a104 104 0 1 0 0 208 a104 104 0 1 0 0 -208 Z M694 254 a46 46 0 1 1 0 92 a46 46 0 1 1 0 -92 Z" fill="#2563eb" stroke="#1f2937" stroke-width="14"/>
+  <circle cx="512" cy="478" r="38" fill="#6b7280" stroke="#1f2937" stroke-width="12"/>
+  <circle cx="512" cy="478" r="16" fill="#1f2937"/>
 </svg>

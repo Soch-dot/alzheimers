@@ -1,5 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round">
-  <path d="M55 55h90"/>
-  <path d="M55 55v95"/>
-  <path d="M70 80v55M88 80v55M106 80v55M124 80v55"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Comb: long body with a row of teeth along the bottom -->
+  <rect x="262" y="360" width="500" height="118" rx="20" fill="#f59e0b" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <rect x="290" y="384" width="444" height="18" rx="9" fill="#fbbf24" opacity="0.85"/>
+  <g stroke="#1f2937" stroke-width="10">
+    <rect x="278" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="314" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="350" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="386" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="422" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="458" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="494" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="530" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="566" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="602" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="638" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="674" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="710" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+    <rect x="746" y="452" width="24" height="266" rx="10" fill="#f59e0b"/>
+  </g>
 </svg>

@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M60 70h80v60a30 30 0 0 1-30 30h-20a30 30 0 0 1-30-30z"/>
-  <path d="M132 90h18a20 20 0 0 1 20 20v0a20 20 0 0 1-20 20h-14"/>
-  <path d="M60 120H42a20 20 0 0 1-20-20v0a20 20 0 0 1 20-20h14"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Cup: tapered mug with handle -->
+  <path d="M636 428 C 796 398 812 574 630 592" fill="none" stroke="#1f2937" stroke-width="68" stroke-linecap="round"/>
+  <path d="M636 428 C 788 404 804 568 630 586" fill="none" stroke="#f1f5f9" stroke-width="46" stroke-linecap="round"/>
+  <path d="M372 360 H652 V700 Q652 762 592 762 H432 Q372 762 372 700 Z" fill="#f1f5f9" stroke="#1f2937" stroke-width="12" stroke-linejoin="round"/>
+  <ellipse cx="512" cy="360" rx="140" ry="30" fill="#e2e8f0" stroke="#1f2937" stroke-width="12"/>
+  <ellipse cx="512" cy="360" rx="100" ry="16" fill="#64748b"/>
 </svg>

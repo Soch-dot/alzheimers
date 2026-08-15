@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="100" cy="120" r="45"/>
-  <path d="M70 105C60 70 70 45 100 40c20-4 30 10 26 28"/>
-  <path d="M88 40c-6 6-12 10-10 14"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Apple: red body with top notch, brown stem, green leaf -->
+  <path d="M512 344 C 500 322 468 318 452 330 C 370 360 308 458 308 600 C 308 752 400 836 512 836 C 624 836 716 752 716 600 C 716 458 654 360 572 330 C 556 318 524 322 512 344 Z" fill="#ef4444" stroke="#1f2937" stroke-width="14" stroke-linejoin="round"/>
+  <ellipse cx="440" cy="540" rx="46" ry="108" fill="#ffffff" opacity="0.18" transform="rotate(-18 440 540)"/>
+  <rect x="498" y="252" width="28" height="82" rx="13" fill="#78350f" stroke="#1f2937" stroke-width="8"/>
+  <ellipse cx="586" cy="308" rx="58" ry="26" fill="#16a34a" stroke="#1f2937" stroke-width="10" transform="rotate(-32 586 308)"/>
 </svg>
