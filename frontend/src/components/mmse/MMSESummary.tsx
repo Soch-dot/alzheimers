@@ -17,11 +17,14 @@ interface MMSESummaryProps {
   /** Items that were sent to the batch but returned an error (no score). */
   errorItemCount: number;
   allFinalized: boolean;
+  /** Sections that are response-complete but need examiner verification to score. */
+  pendingSections: { id: SectionId; title: string }[];
   onAssess: () => void;
   onReview: () => void;
   onContinue: () => void;
   onRestart: () => void;
   onBack: () => void;
+  onHandoffToExaminer?: () => void;
 }
 
 const BREAKDOWN: { title: string; key: keyof MMSEScores; max: number }[] = [
@@ -53,11 +56,13 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
   needsReassessCount,
   errorItemCount,
   allFinalized,
+  pendingSections,
   onAssess,
   onReview,
   onContinue,
   onRestart,
   onBack,
+  onHandoffToExaminer,
 }) => {
   const mode = useAssessmentMode();
   const examinerView = mode !== 'patient';
@@ -80,6 +85,60 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
       </button>
     </div>
   );
+
+  // Patient mode with examiner-dependent sections pending: the score is NOT
+  // final. Never show "MMSE Assessment Complete" and never offer Continue to
+  // Analysis — list the pending sections instead (responses stay preserved).
+  if (mode === 'patient' && pendingSections.length > 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <GlassCard>
+          <div className="text-center mb-8">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.12em] mb-3">
+              MMSE Assessment
+            </p>
+            <p className="text-2xl md:text-3xl font-semibold text-amber-300 tracking-tight">
+              Assessment requires examiner verification
+            </p>
+            <p className="text-sm text-gray-400 font-light mt-2">
+              The MMSE score cannot be finalized until an examiner verifies the
+              pending sections below. All of your responses are preserved.
+            </p>
+          </div>
+
+          <div className="space-y-2 mb-8">
+            {pendingSections.map((row) => (
+              <div
+                key={row.id}
+                className="flex items-center justify-between gap-4 rounded-lg border border-amber-400/20 bg-amber-500/10 px-4 py-2.5"
+              >
+                <span className="text-sm text-gray-300">{row.title}</span>
+                <span className="text-sm font-semibold text-amber-300">
+                  Pending examiner verification
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {onHandoffToExaminer && (
+              <button type="button" onClick={onHandoffToExaminer} className={assessButtonClass}>
+                Hand off to examiner
+              </button>
+            )}
+            <p className="text-xs text-gray-500 text-center">
+              The score is not final while these sections are pending.
+            </p>
+            {footerLinks}
+          </div>
+        </GlassCard>
+      </motion.div>
+    );
+  }
 
   if (phase === 'collect') {
     return (

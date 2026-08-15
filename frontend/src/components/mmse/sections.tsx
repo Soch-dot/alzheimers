@@ -37,6 +37,8 @@ export interface SectionProps {
   phase: MmsePhase;
   /** Re-run the batch assessment for still-unscored items. */
   onRetry: () => void;
+  /** Hand the assessment over to the examiner (preserves all data). */
+  onHandoffToExaminer?: () => void;
 }
 
 export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update, phase, onRetry }) => {
@@ -76,12 +78,21 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update, 
   );
 };
 
-export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update, phase, onRetry }) => {
+export const OrientationPlaceSection: React.FC<SectionProps> = ({
+  state,
+  update,
+  phase,
+  onRetry,
+  onHandoffToExaminer,
+}) => {
   const counts = sectionResponseCounts(state);
   const mode = useAssessmentMode();
   const examinerView = mode !== 'patient';
   const locationIncomplete = LOCATION_FIELDS.some(
     (field) => state.location[field.key].trim() === ''
+  );
+  const allResponded = PLACE_ITEMS.every(
+    (it) => (state.orientationPlace.items[it.key].response ?? '').trim() !== ''
   );
 
   return (
@@ -145,17 +156,24 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update,
       ) : (
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
-            Examiner required
+            {allResponded
+              ? 'Pending examiner verification'
+              : 'Examiner verification required to score'}
           </p>
           <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">
-            This section is scored against the assessment location (state,
-            county, town, building, floor) that only the examiner can set, so
-            it cannot be completed in Patient mode. Answers you record below
-            are kept for practice. Switch to{' '}
-            <span className="text-white font-medium">Examiner</span> or{' '}
-            <span className="text-white font-medium">Examiner + Patient</span>{' '}
-            to run the full assessment.
+            {allResponded
+              ? 'Your responses are recorded but not scored. This section is scored against the assessment location (state, county, town, building, floor) that only the examiner can set — an examiner can verify it later.'
+              : 'Enter all five responses to continue. Scoring needs the assessment location, which only the examiner can set.'}
           </p>
+          {allResponded && onHandoffToExaminer && (
+            <button
+              type="button"
+              onClick={onHandoffToExaminer}
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-400/30 bg-amber-500/10 text-amber-300 transition-all duration-200 hover:bg-amber-500/20"
+            >
+              Hand off to examiner
+            </button>
+          )}
         </div>
       )}
 
@@ -751,7 +769,12 @@ export const WritingSection: React.FC<SectionProps> = ({ state, update, phase, o
   );
 };
 
-export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase }) => {
+export const CopyingSection: React.FC<SectionProps> = ({
+  state,
+  update,
+  phase,
+  onHandoffToExaminer,
+}) => {
   const counts = sectionResponseCounts(state);
   const mode = useAssessmentMode();
   const examinerView = mode !== 'patient';
@@ -803,16 +826,22 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
         ) : (
           <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
-              Examiner required
+              Pending examiner verification
             </p>
             <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">
               Copying is scored from a photo that the examiner takes and
-              analyzes, so this section cannot be completed in Patient mode.
-              Draw the figure on paper, then show it to the examiner. Switch to{' '}
-              <span className="text-white font-medium">Examiner</span> or{' '}
-              <span className="text-white font-medium">Examiner + Patient</span>{' '}
-              to run the full assessment.
+              analyzes, so it cannot be scored in Patient mode. Draw the figure
+              on paper and hand it to the examiner to finish this section.
             </p>
+            {onHandoffToExaminer && (
+              <button
+                type="button"
+                onClick={onHandoffToExaminer}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-400/30 bg-amber-500/10 text-amber-300 transition-all duration-200 hover:bg-amber-500/20"
+              >
+                Hand off to examiner
+              </button>
+            )}
           </div>
         )}
       </div>

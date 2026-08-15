@@ -148,6 +148,23 @@ function App() {
     });
   };
 
+  // "Hand off to examiner" (Patient mode, pending-examiner sections): switch the
+  // session to Examiner mode WITHOUT losing any collected patient responses, so
+  // the examiner can configure the location, run the AI batch, upload the Q11
+  // photo, and finalize the score. Persist immediately (like re-take).
+  const handleHandoffToExaminer = () => {
+    setMode('examiner');
+    saveSession({
+      version: SESSION_VERSION,
+      mode: 'examiner',
+      details,
+      appPhase: phase,
+      mmse,
+      mmseScore,
+      result,
+    });
+  };
+
   // "Restart Assessment": clear the FULL persisted session and return to
   // Assessment Mode. Verified by a refresh landing on Assessment Mode.
   const handleRestart = () => {
@@ -237,6 +254,7 @@ function App() {
                   initialPhase={mmse?.phase}
                   initialState={mmse?.state}
                   onSessionStateChange={handleMmseStateChange}
+                  onHandoffToExaminer={handleHandoffToExaminer}
                 />
               ) : (
                 <FormPanel onSubmit={handleSubmit}>

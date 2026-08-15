@@ -10,8 +10,9 @@ import {
 import {
   applyBatchResultsToDraft,
   buildBatchItems,
+  canNavigateSection,
   countAssessmentErrors,
-  isSectionResponseComplete,
+  getSectionStatus,
   sectionResponseCounts,
 } from '../../mmse/batch';
 import { MMSE_SECTIONS } from '../../mmse/config';
@@ -45,6 +46,8 @@ interface MMSEAssessmentProps {
   initialState?: MMSEState;
   /** Reports the current MMSE position/state so the session can be persisted. */
   onSessionStateChange?: (step: number, phase: MmsePhase, state: MMSEState) => void;
+  /** Hand the assessment over to the examiner (mode -> 'examiner'), preserving all data. */
+  onHandoffToExaminer?: () => void;
 }
 
 const SECTION_COMPONENTS: Record<SectionId, React.FC<SectionProps>> = {
@@ -77,6 +80,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   initialPhase,
   initialState,
   onSessionStateChange,
+  onHandoffToExaminer,
 }) => {
   const [step, setStep] = useState(initialStep ?? INTRO_STEP);
   const [state, setState] = useState<MMSEState>(
@@ -170,10 +174,13 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
 
   const total = computeTotal(state);
   const scores = computeScores(state);
-  const responseCounts = sectionResponseCounts(state);
+  const responseCounts = sectionResponseCounts(state, mode);
   const pendingAssessCount = Object.keys(buildBatchItems(state, true)).length;
   const errorItemCount = countAssessmentErrors(state);
   const allFinalized = MMSE_SECTIONS.every((s) => isSectionComplete(s.id, state));
+  const pendingSections = MMSE_SECTIONS.filter(
+    (s) => getSectionStatus(s.id, state, mode) === 'pending-examiner'
+  ).map((s) => ({ id: s.id, title: s.title }));
 
   const jumpToReview = () => {
     const firstIncomplete = MMSE_SECTIONS.findIndex((s) => !isSectionComplete(s.id, state));
@@ -195,11 +202,13 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
         needsReassessCount={pendingAssessCount}
         errorItemCount={errorItemCount}
         allFinalized={allFinalized}
+        pendingSections={pendingSections}
         onAssess={() => void runBatchAssessment()}
         onReview={jumpToReview}
         onContinue={() => onComplete(total)}
         onRestart={restart}
         onBack={() => setStep(SUMMARY_STEP - 1)}
+        onHandoffToExaminer={onHandoffToExaminer}
       />
     );
   }
@@ -207,34 +216,35 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   const section = MMSE_SECTIONS[step - 1];
   const SectionComponent = SECTION_COMPONENTS[section.id];
   const assessing = phase === 'assessing';
-  const sectionComplete =
-    phase === 'collect'
-      ? isSectionResponseComplete(section.id, state)
-      : isSectionComplete(section.id, state);
 
-  const canAdvance = sectionComplete && !assessing;
+  // Navigation (shared by the Next button and the Enter key). Patient mode
+  // lets the patient CONTINUE through examiner-dependent sections once their
+  // input is complete (pending examiner verification); missing input still
+  // blocks navigation.
+  const navigable = canNavigateSection(section.id, state, mode, phase);
+  const canAdvance = navigable && !assessing;
   const navigationValue = { goToNext, canAdvance };
 
-  // Pure Patient mode intentionally cannot complete examiner-dependent sections
-  // (Orientation to Place needs the examiner-set location; Copying needs the
-  // examiner's photo analysis). The blocking logic stays — the message below
-  // explains WHY instead of a generic "Complete all items to continue".
-  const patientBlocked =
-    mode === 'patient' && (section.id === 'orientationPlace' || section.id === 'copying');
+  const pendingExaminer =
+    mode === 'patient' && getSectionStatus(section.id, state, mode) === 'pending-examiner';
 
   let centerMessage: React.ReactNode;
   if (assessing) {
     centerMessage = 'AI assessment in progress…';
-  } else if (patientBlocked && !sectionComplete) {
-    centerMessage = 'An examiner is required for this section';
+  } else if (mode === 'patient' && (section.id === 'orientationPlace' || section.id === 'copying')) {
+    centerMessage = pendingExaminer ? (
+      <span className="text-amber-300">Pending examiner verification</span>
+    ) : (
+      'Complete all items to continue'
+    );
   } else if (phase === 'collect') {
-    centerMessage = sectionComplete ? (
+    centerMessage = navigable ? (
       <span className="text-gray-500">Responses complete</span>
     ) : (
       'Complete all items to continue'
     );
   } else {
-    centerMessage = sectionComplete ? (
+    centerMessage = navigable ? (
       <span className="text-gray-500">Section scored</span>
     ) : (
       'Resolve the flagged items to continue'
@@ -279,6 +289,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
             update={update}
             phase={phase}
             onRetry={() => void runBatchAssessment()}
+            onHandoffToExaminer={onHandoffToExaminer}
           />
         </motion.div>
 
@@ -295,7 +306,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
           <button
             type="button"
             onClick={goToNext}
-            disabled={!sectionComplete || assessing}
+            disabled={!navigable || assessing}
             className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}

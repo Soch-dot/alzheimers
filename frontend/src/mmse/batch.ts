@@ -1,5 +1,6 @@
-import type { ItemState, MMSEState, PlaceKey, SectionId, TimeKey } from './state';
-import { isCopyingFinalized } from './state';
+import type { ItemState, MMSEState, MmsePhase, PlaceKey, SectionId, TimeKey } from './state';
+import { isCopyingFinalized, isSectionComplete } from './state';
+import type { AssessmentMode } from './mode';
 import { getNamingObject } from './namingLibrary';
 import {
   AI_CONFIDENCE_REVIEW_THRESHOLD,
@@ -148,19 +149,30 @@ export interface SectionResponseCount {
  * How many required entries each section has collected (responses for AI items,
  * examiner marks for manual/visual items). Used during Phase 1 instead of
  * scores, which are only meaningful after AI assessment.
+ *
+ * Mode-aware: in pure Patient mode the examiner-gated sections count the
+ * PATIENT'S input only — the five Orientation to Place responses count as
+ * collected without the examiner-set location (that is what lets the patient
+ * continue), and Copying counts as the patient portion being done. Examiner /
+ * Examiner + Patient keep the strict semantics (location must be configured for
+ * place items to count; Copying must be finalized).
  */
 export function sectionResponseCounts(
-  state: MMSEState
+  state: MMSEState,
+  mode?: AssessmentMode
 ): Record<SectionId, SectionResponseCount> {
   const nonEmpty = (item: ItemState) => (item.response ?? '').trim() !== '';
+  const patient = mode === 'patient';
 
   const counts: Record<SectionId, number> = {
     orientationTime: Object.values(state.orientationTime.items).filter(nonEmpty).length,
-    orientationPlace: PLACE_ITEMS.filter(
-      (it) =>
-        state.location[it.key].trim() !== '' &&
-        nonEmpty(state.orientationPlace.items[it.key])
-    ).length,
+    orientationPlace: patient
+      ? PLACE_ITEMS.filter((it) => nonEmpty(state.orientationPlace.items[it.key])).length
+      : PLACE_ITEMS.filter(
+          (it) =>
+            state.location[it.key].trim() !== '' &&
+            nonEmpty(state.orientationPlace.items[it.key])
+        ).length,
     registration: state.registration.items.filter(nonEmpty).length,
     attention:
       state.attention.task === 'serial7'
@@ -176,7 +188,7 @@ export function sectionResponseCounts(
     ).length,
     reading: state.reading.correct !== null ? 1 : 0,
     writing: nonEmpty(state.writing) ? 1 : 0,
-    copying: isCopyingFinalized(state.copying) ? 1 : 0,
+    copying: patient ? 1 : isCopyingFinalized(state.copying) ? 1 : 0,
   };
 
   const maxes: Record<SectionId, number> = {
@@ -201,9 +213,70 @@ export function sectionResponseCounts(
 }
 
 /** Phase 1 completeness: every required response/mark for the section is present. */
-export function isSectionResponseComplete(id: SectionId, state: MMSEState): boolean {
-  const count = sectionResponseCounts(state)[id];
+export function isSectionResponseComplete(
+  id: SectionId,
+  state: MMSEState,
+  mode?: AssessmentMode
+): boolean {
+  const count = sectionResponseCounts(state, mode)[id];
   return count.done >= count.max;
+}
+
+/**
+ * Section status used for the Patient-mode navigation rules and final-summary
+ * gating. It distinguishes the three states the flow depends on:
+ *
+ * - 'complete'         : the section is fully scored/finalized.
+ * - 'pending-examiner' : enough patient input to continue, but it cannot be
+ *                        scored yet without the examiner (Orientation to Place
+ *                        needs the assessment-location reference; Copying needs
+ *                        a photo analysis). NO score is assigned and none is
+ *                        fabricated — responses are merely collected/preserved.
+ * - 'incomplete'       : more patient input is required.
+ *
+ * Only applies to pure Patient mode; examiner / Examiner + Patient sections are
+ * either 'complete' or 'incomplete' (their normal workflow never goes through a
+ * pending-examiner state).
+ */
+export function getSectionStatus(
+  id: SectionId,
+  state: MMSEState,
+  mode: AssessmentMode
+): SectionStatus {
+  if (isSectionComplete(id, state)) return 'complete';
+  if (mode === 'patient') {
+    if (id === 'orientationPlace') {
+      const allResponded = PLACE_ITEMS.every(
+        (it) => (state.orientationPlace.items[it.key].response ?? '').trim() !== ''
+      );
+      if (allResponded) return 'pending-examiner';
+    }
+    if (id === 'copying') return 'pending-examiner';
+  }
+  return 'incomplete';
+}
+
+export type SectionStatus = 'incomplete' | 'pending-examiner' | 'complete';
+
+/**
+ * Whether the user may navigate PAST this section right now (the shared Next /
+ * Enter path). In Patient mode the examiner-gated sections stay navigable once
+ * their patient input is complete (pending examiner verification), so the
+ * patient is never permanently stuck. Examiner / Examiner + Patient keep the
+ * strict semantics (a configured location / finalized Copying is required).
+ */
+export function canNavigateSection(
+  id: SectionId,
+  state: MMSEState,
+  mode: AssessmentMode,
+  phase: MmsePhase
+): boolean {
+  if (mode === 'patient' && (id === 'orientationPlace' || id === 'copying')) {
+    return getSectionStatus(id, state, mode) !== 'incomplete';
+  }
+  return phase === 'collect'
+    ? isSectionResponseComplete(id, state, mode)
+    : isSectionComplete(id, state);
 }
 
 /** Every AI-scored item across the questionnaire (response + score state). */
