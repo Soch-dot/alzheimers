@@ -13,9 +13,12 @@ export interface PatientInput {
 
 export interface PredictionResponse {
   model_version: string;
+  calibrator_version?: string | null;
   screening_target: string;
   screening_probability: number;
+  calibrated_screening_probability?: number | null;
   screening_threshold: number;
+  calibrated_threshold_equivalent?: number;
   screening_result: 'positive' | 'negative';
   predicted_class: string;
   features: {
@@ -29,9 +32,16 @@ export interface PredictionResponse {
     label: string;
     not_a_diagnosis: boolean;
   };
+  calibration?: {
+    display_calibrated: boolean;
+    method: string;
+    decision_uses_raw_probability: boolean;
+    note?: string;
+  };
   limitations: {
     clinical_validation: boolean;
     prospective_conversion_prediction: boolean;
+    calibrated_not_clinically_validated?: boolean;
   };
 }
 

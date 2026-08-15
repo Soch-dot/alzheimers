@@ -34,6 +34,8 @@ from src.api import (  # noqa: E402
     SCREENING_MODEL_VERSION,
     SCREENING_THRESHOLD,
     SCREENING_TARGET,
+    CALIBRATOR_VERSION,
+    CALIBRATED_DISPLAY_BOUNDARY,
     app,
 )
 
@@ -133,6 +135,40 @@ class PredictContractTest(unittest.TestCase):
         body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
         self.assertIn("screening_probability", body)
         self.assertNotIn("detection_percentage", body)
+        # 3-class probabilities must stay absent (Phase 15)
+        for old_field in ["nondemented_probability", "converted_probability",
+                          "demented_probability", "detection_percentage"]:
+            self.assertNotIn(old_field, body)
+
+    # K. calibrated display field present with calibration metadata
+    def test_calibrated_screening_probability_present(self):
+        body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
+        self.assertIn("calibrated_screening_probability", body)
+        self.assertIsInstance(body["calibrated_screening_probability"], float)
+
+    def test_calibrator_version_and_boundary(self):
+        body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
+        self.assertEqual(body["calibrator_version"], CALIBRATOR_VERSION)
+        self.assertAlmostEqual(body["calibrated_threshold_equivalent"], CALIBRATED_DISPLAY_BOUNDARY, places=4)
+
+    def test_calibration_metadata(self):
+        body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
+        cal = body["calibration"]
+        self.assertTrue(cal["display_calibrated"])
+        self.assertEqual(cal["method"], "sigmoid")
+        self.assertTrue(cal["decision_uses_raw_probability"])
+
+    def test_raw_field_not_renamed(self):
+        body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
+        self.assertEqual(list(body.keys()).count("screening_probability"), 1)
+        self.assertEqual(list(body.keys()).count("calibrated_screening_probability"), 1)
+
+    # L. screening_result must follow the RAW threshold, not the calibrated value
+    def test_decision_follows_raw_threshold(self):
+        # raw 0.99998 -> positive even though calibrated (0.930) is also high
+        body = self._post({"age": 74, "sex": 1, "education_years": 10, "mmse": 23, "ses": 1}).json()
+        self.assertGreaterEqual(body["screening_probability"], SCREENING_THRESHOLD)
+        self.assertEqual(body["screening_result"], "positive")
 
 
 if __name__ == "__main__":
