@@ -43,6 +43,34 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
+# ============================================================
+# ML research artifacts (intentionally uncommitted)
+# These are research-only outputs and phase scripts. The ACTIVE
+# production artifacts live under backend/models/production/ and
+# backend/models/backups/ and MUST remain tracked — never add
+# those directories here.
+# ============================================================
+backend/models/experiments/
+backend/models/calibration/
+backend/models/best_model_calibrated.pkl
+backend/scripts/
+
+# Research-only phase scripts (produced during ML research phases)
+backend/src/benchmark_subject_grouped_models.py
+backend/src/binary_vs_three_class_phase4.py
+backend/src/build_calibrator_phase15.py
+backend/src/calibrate_subject_grouped_phase3.py
+backend/src/error_analysis_phase9.py
+backend/src/evaluate_subject_grouped_baseline.py
+backend/src/feature_feasibility_phase10.py
+backend/src/final_candidate_phase11.py
+backend/src/latest_visit_phase7.py
+backend/src/longitudinal_phase6.py
+backend/src/probability_audit_phase13.py
+backend/src/recalibration_phase14.py
+backend/src/threshold_screening_phase5.py
+backend/src/visit_coverage_phase8.py
+
 
 
 

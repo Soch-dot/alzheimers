@@ -24,8 +24,8 @@
 ### Working (verified)
 - Patient clinical input form (age, sex, education_years, mmse, ses).
 - **Assessment Details step (pre-MMSE):** the app now collects Age / Sex / Education (years) / SES on a dedicated first screen before the MMSE begins. Values live in App-level `formData` so they survive Assessment Details → MMSE → AI assessment → Summary → Analysis (no re-entry). "Restart Assessment" clears them back to defaults and returns to Assessment Details. The post-MMSE screen shows them as a read-only summary (no duplicate editable inputs).
-- ML prediction via FastAPI `POST /predict` (Random Forest pipeline).
-- Probability breakdown (pie chart + bars) and confidence/`detection_percentage` display.
+- ML prediction via FastAPI `POST /predict` (**experimental binary screening candidate** — versioned Logistic Regression, `binary_lr_latest_visit_v1`; raw probability vs threshold 0.40 → positive/negative; **sigmoid-calibrated display-only probability** `calibrated_screening_probability` never determines the decision).
+- Probability breakdown (pie chart + bars) driven by the **calibrated display** probability; the screening badge is generated from the **raw 0.40 decision**.
 - **AI-assisted 11-section MMSE questionnaire** (replaces the raw MMSE number input) with a **two-phase batch workflow**:
   1. **Collect responses** — the examiner/patient complete the whole questionnaire; the app only records responses (typed or speech). **No AI calls, no per-question assessment, no "Assessing…" states.**
   2. **Assess MMSE with AI** — one explicit button sends a **single batch** `POST /mmse/evaluate` with all collected responses; the backend returns per-item structured results. The examiner reviews (low-confidence → "Review required") and can override manually. Final `mmse` (0–30) flows into the existing `/predict`.
@@ -92,16 +92,22 @@
 - **AI service:** `backend/src/ai_eval.py` — provider-agnostic (`AI_PROVIDER=ollama|gemini|none`), **batch** request with per-item structured JSON results, strict per-item validation, per-section prompts. **Provider-aware batching:** Ollama evaluates the WHOLE batch with a SINGLE `/api/chat` call (one prompt containing every item + its section-specific rules; one structured JSON response with one entry per item — no per-item Ollama calls, no concurrent Ollama calls). Gemini keeps per-item parallel evaluation via stdlib `concurrent.futures` (`GEMINI_MAX_CONCURRENCY=8`). Uses only Python stdlib (no new deps). No patient data logged/persisted. Backend-only secrets via env / `.env` (python-dotenv).
 - **Vision service (Q11):** `backend/src/vision_eval.py` + `backend/src/vision_image.py` — MMSE Question 11 figure-copying evaluation via `POST /mmse/copying/evaluate`. Provider abstraction built around an OpenAI-compatible multimodal `chat/completions` contract (`VISION_PROVIDER=ollama|gemini|openai`; exactly ONE provider per assessment, no voting/fallback). Shared layer owns the MMSE copying criterion prompt, normalized schema, strict validation, confidence/review, and error normalization; provider adapters only handle base URL/model/auth/payload/response extraction. `VISION_TIMEOUT` (default 120s) is separate from the text-MMSE timeouts. Images are processed in-memory with Pillow (no new deps, no multipart upload — raw binary or JSON base64 body). The trusted reference figure is loaded server-side from `frontend/public/mmse-copying-figure.png` (never from the client).
 - **Validation:** Pydantic `PatientInput` model. Note: no `min`/`max` range constraints are enforced server-side.
-- **Model loading:** `joblib.load` at import time via `load_model()`; checks `MODEL_PATH` env, then several default paths. If missing, server still starts but `/predict` returns 500.
+- **Model loading:** `joblib.load` at import time via `load_model()` (versioned production artifact `binary_lr_latest_visit_v1.pkl`, checksum-verified against the locked MD5 `8FC95A3838FFF665CF47FA55C4322096` — a mismatch raises loudly, it never silently loads). The display-only sigmoid calibrator is loaded the same way (`load_calibrator()`, `sigmoid_calibrator_v1.pkl`, MD5 `1BF75C442194E83D30847FD0F5B8C044`; missing/corrupt → returns None, calibrated display becomes None, raw decision unaffected). Both load ONCE at startup. The legacy `best_model.pkl` / `best_model_rf_legacy.pkl` (Random Forest) is **not** loaded by the API — it is rollback/research only.
 
-### ML
-- **Model:** sklearn `Pipeline(StandardScaler, RandomForestClassifier)`.
-  - `RandomForestClassifier(n_estimators=200, random_state=42, class_weight={0:1, 1:4, 2:2})`.
-- **Preprocessing:** `StandardScaler` (note: scaler before a Random Forest is unnecessary — acknowledged in the metrics JSON; do not add/remove without explicit instruction).
+### ML (PRODUCTION — experimental binary screening candidate, frozen)
+- **Active model:** sklearn `Pipeline(SimpleImputer(median), StandardScaler, LogisticRegression)`.
+  - `LogisticRegression(C=10.0, class_weight="balanced", solver="lbfgs", max_iter=3000, random_state=42)`.
+- **Preprocessing:** `SimpleImputer(strategy="median")` → `StandardScaler` → `LogisticRegression`.
 - **Features (exact order):** `age`, `sex`, `education_years`, `mmse`, `ses`.
-- **Classes:** `0 = Nondemented`, `1 = Converted`, `2 = Demented`.
-- **Training pipeline:** `backend/src/train_clean_clinical_model.py` — loads `Dataset.csv`, renames/maps columns, median-fills NaNs, 80/20 stratified split, trains, saves `best_model.pkl`, and generates static SHAP artifacts.
-- **Artifact:** `backend/models/best_model.pkl` (joblib Pipeline).
+- **Binary target:** `0 = Nondemented`, `1 = Converted OR Demented` (`dementia_related_outcome`).
+- **Visit policy:** one available visit → use it; multiple visits → **latest by MR Delay**.
+- **Artifacts (production):**
+  - `backend/models/production/binary_lr_latest_visit_v1.pkl` (MD5 `8FC95A3838FFF665CF47FA55C4322096`)
+  - `backend/models/production/sigmoid_calibrator_v1.pkl` (MD5 `1BF75C442194E83D30847FD0F5B8C044`) — **display-only** sigmoid calibration fitted on the 112-training-subject grouped OOF.
+  - `backend/models/backups/best_model_rf_legacy.pkl` (legacy Random Forest, MD5 `15AA204B9BB50E9F9D8E365359B1646D`) — rollback/research only, never loaded by the API.
+- **Raw screening threshold:** `0.40`. `raw screening_probability >= 0.40` → `positive` (`dementia_related`), else `negative` (`nondemented`).
+- **Calibration semantics:** `calibrated_screening_probability` is DISPLAY ONLY (a monotonic sigmoid transform, mapped boundary at raw 0.40 ≈ 0.4082). It MUST NEVER determine `screening_result`. Fixed case: raw 0.99998 → calibrated 0.930075, still positive.
+- **SHAP compatibility:** production SHAP (`backend/models/production/shap_binary_lr_v1/`) explains the underlying LR only; calibration is a monotonic transform, so no SHAP for the calibrator is generated.
 
 ### Actual data flow
 ```
@@ -113,10 +119,15 @@ User/Examiner
   → predictAlzheimers()  (frontend/src/api.ts)
   → axios POST /predict   (FastAPI backend/src/api.py)
   → DataFrame built with exact 5-feature order
-  → pipeline.predict / predict_proba
-  → JSON response { alzheimers_detected, detection_percentage, predicted_class,
-                    class_index, probabilities, rule_applied, rule_usage_percentage }
-  → ResultCard + PredictionPieChart render the result
+  → pipeline.predict_proba → raw screening_probability (decision source)
+  → calibrated_screening_probability (sigmoid, display-only)
+  → JSON response { model_version, calibrator_version, screening_target,
+                    screening_probability, calibrated_screening_probability,
+                    screening_threshold, calibrated_threshold_equivalent,
+                    screening_result, predicted_class, features,
+                    interpretation, calibration, limitations }
+  → ResultCard + PredictionPieChart render the result (calibrated number;
+    screening badge from raw 0.40 decision)
 ```
 
 ---
@@ -190,7 +201,7 @@ alzheimers_ml_project/
 
 ## 5. API Contract
 
-### `POST /predict`
+### `POST /predict` (versioned binary screening contract — FROZEN)
 - **Method:** `POST`
 - **Endpoint:** `http://127.0.0.1:8000/predict` (base URL configurable via `VITE_API_URL`)
 - **Request body (exactly 5 fields):**
@@ -204,26 +215,39 @@ alzheimers_ml_project/
   }
   ```
   - `age`: int; `sex`: int (1 = Male, 0 = Female); `education_years`: int; `mmse`: float (0–30); `ses`: float.
-  - No server-side range validation — out-of-range values are currently accepted.
-- **Response:**
+  - All 5 fields required (schema `PatientInput`); a missing `ses` returns 422. No server-side range validation beyond types.
+- **Response (versioned binary screening contract):**
   ```json
   {
-    "alzheimers_detected": true,
-    "detection_percentage": 82.35,
-    "predicted_class": "Demented",
-    "class_index": 2,
-    "probabilities": { "Nondemented": 0.12, "Converted": 0.23, "Demented": 0.65 },
-    "rule_applied": false,
-    "rule_usage_percentage": 0.0
+    "model_version": "binary_lr_latest_visit_v1",
+    "calibrator_version": "sigmoid_calibrator_v1",
+    "screening_target": "dementia_related_outcome",
+    "screening_probability": 0.99998,
+    "calibrated_screening_probability": 0.930075,
+    "screening_threshold": 0.4,
+    "calibrated_threshold_equivalent": 0.4082,
+    "screening_result": "positive",
+    "predicted_class": "dementia_related",
+    "features": { "age": 74, "sex": 1, "education_years": 10, "mmse": 23.0, "ses": 1.0 },
+    "interpretation": { "label": "Model-estimated screening probability", "not_a_diagnosis": true },
+    "calibration": {
+      "display_calibrated": true,
+      "method": "sigmoid",
+      "decision_uses_raw_probability": true,
+      "note": "Display-only calibration. Screening decision is based on the RAW screening_probability threshold 0.40, not the calibrated value."
+    },
+    "limitations": {
+      "clinical_validation": false,
+      "prospective_conversion_prediction": false,
+      "calibrated_not_clinically_validated": true
+    }
   }
   ```
-  - `detection_percentage` = (`Converted` + `Demented` probability) × 100, rounded to 2 dp.
-  - `alzheimers_detected` = `pred_class in [1, 2]`.
-  - `rule_applied` / `rule_usage_percentage` are hardcoded legacy fields (always `false` / `0.0`).
-- **Important assumptions:**
-  - `probabilities` and `class_index` are keyed by **position** (`0,1,2`), not by `model.classes_`. This holds only while classes are `[0,1,2]`.
-  - The DataFrame is built by column **key**, so request field order does not matter.
-- **Frontend caller:** `predictAlzheimers()` in `frontend/src/api.ts`.
+  - **`screening_probability` = RAW LR probability** for `Converted OR Demented`; this is the DECISION source: `>= 0.40` → `screening_result = "positive"`, `predicted_class = "dementia_related"`, else negative/nondemented.
+  - **`calibrated_screening_probability` = DISPLAY-ONLY** sigmoid transform. It NEVER determines `screening_result`. If the calibrator is unavailable/missing/corrupt, it is `null`, `display_calibrated` is `false`, and the raw decision still works.
+  - `calibrated_threshold_equivalent` (0.4082) is the calibrated display boundary at raw 0.40 — informational only, never used for the decision.
+  - The OLD 3-class fields (`alzheimers_detected`, `detection_percentage`, `probabilities`, `class_index`, `rule_applied`, `rule_usage_percentage`, per-class probabilities) are GONE — do not restore them.
+- **Frontend caller:** `predictAlzheimers()` in `frontend/src/api.ts`. `ResultCard` shows the calibrated number (whole-percent) for patients and a "Technical Details" block (raw + calibrated + threshold) for examiner views.
 
 ### `POST /mmse/evaluate` (AI-assisted MMSE batch scoring — separate service)
 - **Purpose:** Scores ALL collected MMSE responses in ONE request via an AI provider. Triggered only by the explicit "Assess MMSE with AI" action. Never sends item answers to `/predict`; only the final `mmse` total does.
@@ -284,15 +308,16 @@ alzheimers_ml_project/
 
 ## 6. ML Contract (CRITICAL — DO NOT CHANGE)
 
-- **Input features (order matters for the scaler):** `age`, `sex`, `education_years`, `mmse`, `ses`.
-- **Expected types:** age/sex/education_years ints; mmse/ses floats.
-- **Preprocessing:** `StandardScaler` applied before the Random Forest inside the Pipeline.
-  - Fitted scaler means: `[77.17, 0.43, 14.53, 27.29, 2.47]`.
-- **Model type:** `RandomForestClassifier` (200 trees, `random_state=42`, `class_weight={0:1,1:4,2:2}`).
-- **Output classes:** `0 = Nondemented`, `1 = Converted`, `2 = Demented`.
-- **Probability interpretation:** probabilities are per-class `predict_proba` outputs, then `detection_percentage` merges Converted+Demented. There is no confidence threshold logic; the ML prediction must never be presented as a diagnosis.
-- **Leakage consideration:** CDR was removed because it is assigned *after* clinicians assess dementia severity (circular). Never reintroduce CDR or other post-diagnosis features.
-- **Artifact compatibility:** `best_model.pkl` is sklearn-version-sensitive; retraining with different sklearn versions can break `api.py`'s position-indexed probability logic.
+- **Active production model:** `binary_lr_latest_visit_v1` — Logistic Regression `Pipeline(SimpleImputer(median), StandardScaler, LogisticRegression(C=10, class_weight="balanced", solver="lbfgs", max_iter=3000))`.
+- **Input features (order matters for the pipeline):** `age`, `sex`, `education_years`, `mmse`, `ses`.
+- **Expected types:** age/sex/education_years ints; mmse/ses floats. The pipeline imputes missing `ses` with the median (schema still requires the field).
+- **Binary target:** `0 = Nondemented`, `1 = Converted OR Demented`.
+- **Visit policy:** one visit → use it; multiple visits → latest by MR Delay. This is a latest-visit classification, **NOT** prospective future-conversion prediction.
+- **Decision rule (HARD INVARIANT):** `raw screening_probability >= 0.40` → `positive`. The calibrated (sigmoid) value is display-only and must never change the decision. Verified: 0/38 outer-test decisions change under calibration.
+- **Probability semantics:** probabilities are `predict_proba` outputs of the LR. There is no confidence threshold beyond the 0.40 screening boundary; the ML result must never be presented as a diagnosis.
+- **Leakage consideration:** CDR was removed because it is assigned *after* clinicians assess dementia severity (circular). Never reintroduce CDR or other post-diagnosis features. MRI features (eTIV/nWBV/ASF) are research-only (not product-collected, inconsistent gains) — do not add to production.
+- **Artifact compatibility:** artifacts are sklearn-version-sensitive (`backend/models/production/binary_lr_latest_visit_v1.pkl` + `sigmoid_calibrator_v1.pkl`); checksum-locked in `api.py` — a mismatch fails loudly at startup. Retraining/version changes require updating the locked MD5s.
+- **Legacy Random Forest:** `backend/models/backups/best_model_rf_legacy.pkl` is the pre-Phase-12 RF backup (rollback/research only). The API never loads `best_model.pkl` / `best_model_calibrated.pkl` / research experiment models.
 
 ---
 
@@ -357,10 +382,10 @@ alzheimers_ml_project/
 - [x] **Assessment Mode step (Patient / Examiner / Examiner+Patient)** with role-gated UI (expected answers, instructions, AI details/override, location config, Q11 camera hidden in Patient mode; scoring identical)
 - [x] **Details persistence:** approved mode + demographics restored from localStorage; Restart clears; numeric fields sanitized strings (no leading zeros / no "0" coercion), converted only for `/predict`
 - [x] **Q6 Naming object library:** 12 local SVG objects, 2 drawn randomly per assessment, examiner-selectable, deterministic scoring preserved via fixed slot keys + `expected`
-- [x] ML prediction (`POST /predict`)
-- [x] Probability breakdown (pie chart + bars)
-- [x] Confidence / `detection_percentage` display
-- [x] Detection status (Alzheimer's detected / not)
+- [x] ML prediction (`POST /predict`) — versioned binary LR (`binary_lr_latest_visit_v1`), raw threshold 0.40
+- [x] Probability breakdown (pie chart + bars) — driven by the calibrated display value
+- [x] Sigmoid display-only calibration (`calibrated_screening_probability`; decision stays raw)
+- [x] Screening result badge from the RAW 0.40 decision; non-diagnostic disclaimer; examiner-only technical details (raw + calibrated + threshold)
 - [x] MMSE questionnaire (11 sections, 0–30) with **two-phase batch workflow** (collect → one "Assess MMSE with AI" action)
 - [x] AI-assisted batch evaluation (`POST /mmse/evaluate`, provider-agnostic: Ollama/Gemini, per-item results)
 - [x] No AI calls while answering — typing/speech/Enter never triggers evaluation
@@ -384,11 +409,19 @@ alzheimers_ml_project/
 
 ## 10. Research Context
 
-- **Dataset:** OASIS-style clinical tabular data (`backend/data/raw/Dataset.csv`), 373 rows, multi-class `Nondemented / Converted / Demented` (class imbalance: only ~37 Converted samples).
-- **CDR leakage discovery/fix:** An earlier model included CDR and reached ~89% accuracy. CDR is assigned after dementia severity is known, so it leaked the answer. Removing CDR and retraining dropped accuracy to ~76% — that lower number is the honest one.
-- **Current model metrics** (5 features, no CDR, from `clean_clinical_metrics_after_cdr_removal.json`):
-  - Accuracy 0.76; macro precision 0.86, recall 0.62, F1 0.65.
-  - Converted-class recall is weak (~0.25) due to class imbalance — a known limitation, not a clinical claim.
+- **Dataset:** OASIS-style clinical tabular data (`backend/data/raw/Dataset.csv`), 373 rows, **150 subjects**. Binary framing: `0 = Nondemented`, `1 = Converted OR Demented`. Only ~14 Converted subjects; 4 Converted in the outer test.
+- **CDR leakage discovery/fix:** An earlier model included CDR and reached ~89% accuracy. CDR is assigned after dementia severity is known, so it leaked the answer. CDR is permanently excluded (and must never be reintroduced).
+- **Canonical subject-grouped split:** 112 training / 38 outer-test subjects, 0 overlap (`backend/models/experiments/subject_grouped_baseline/subject_split.json`). CV is `StratifiedGroupKFold(5, shuffle=True, random_state=42)` grouped by Subject ID (leakage-free; Subject ID is the independent unit).
+- **Current validation metrics (outer test, n=38, frozen candidate `binary_lr_latest_visit_v1`, latest visit):**
+  - Sensitivity 0.75, Specificity 0.833, Balanced accuracy 0.792, PPV 0.833, NPV 0.75, F1 0.789, Accuracy 0.789, ROC-AUC 0.836, PR-AUC 0.892, Brier 0.1565, Log loss 0.5033.
+  - Bootstrap CIs (n=38, 2000 resamples): sensitivity [0.529, 0.944], specificity [0.632, 1.000], balanced accuracy [0.653, 0.917], PPV [0.643, 1.000], NPV [0.556, 0.941].
+  - Sigmoid display calibration (dev OOF): raw log loss 0.3875 / Brier 0.1279 / ECE 0.0792; sigmoid 0.4301 / 0.1381 / 0.0897; isotonic unstable (log loss 1.28, fold values up to 3.5) — rejected.
+- **Known limitations (must be documented honestly):**
+  - 150 subjects; 14 Converted; 4 Converted in the 38-subject outer test; wide confidence intervals (small n).
+  - **No clinical validation** — this is a research/educational prototype, a screening classifier only.
+  - **No prospective future-conversion prediction** — the latest-visit label is not a future prediction.
+  - Converted subjects with normal MMSE may be indistinguishable from Nondemented (5-feature ceiling — visit_count/time/delta/MRI feature sets did not beat it; research experiments only, not in production).
+  - Calibration is display-oriented and **not clinically validated**; the calibrated number must never be presented as clinical probability.
 - **Clinical consultation:** The tool is explicitly framed as a screening prototype; no diagnostic thresholds are claimed. Do not invent thresholds (e.g., "MMSE below X means Alzheimer's").
 - **Literature comparison:** README cites Standard MMSE; do not exaggerate research claims or convert planned work into completed work.
 
@@ -399,32 +432,34 @@ alzheimers_ml_project/
 | Issue | Severity | Impact | Safe to ignore? | Planned resolution |
 |---|---|---|---|---|
 | Copying-section reference figure asset missing (`COPYING_REFERENCE_IMAGE` empty) | Medium | Placeholder shown instead of the figure | No (feature incomplete) | Supply asset + set path in `config.ts` |
-| `/predict` probabilities keyed by position, not `model.classes_` | Medium | Silent mislabeling if retrained with different class order | Yes until retrained | Use `model.classes_` in `api.py` when next touched |
 | No range validation on `PatientInput` (e.g., mmse=999 accepted) | Medium | Garbage-in → misleading output | Mostly | Add Pydantic `Field` constraints |
-| StandardScaler before RandomForest is unnecessary | Low | Harmless, slightly confusing | Yes | Clean up only if retraining is authorized |
+| StandardScaler before RandomForest (legacy `best_model.pkl`) is unnecessary | Low | Harmless, slightly confusing | Yes | Legacy artifact only; active model is LR |
 | Hardcoded absolute dataset path in training script | Low | Retraining fails on other machines | Yes | Make path relative/configurable |
 | Dead boilerplate: `src/main.ts`, `counter.ts`, `LoadingSpinner.tsx` (unused) | Low | Confusion | Yes | Remove only with explicit permission |
-| Hardcoded legacy `rule_applied` / `rule_usage_percentage` fields | Low | Misleading API surface | Yes | Remove on next API refactor |
 | README claims `Dataset.csv` isn't committed, but it is | Low | Doc mismatch | Yes | Fix README |
-| Converted-class recall weak (class imbalance) | Medium | Screening may miss conversions | Yes (research limitation) | Larger dataset / resampling (future) |
+| Converted-class detection limited (~14 Converted subjects total; 4 in outer test) | Medium | Screening may miss conversions | Yes (research limitation) | Larger dataset / resampling (future) |
+| Raw probabilities not well calibrated at the low end (predicted <0.10 had ~27% observed positive on outer) | Medium | Display-only; decision unchanged | Yes for decision | Sigmoid display calibration shipped (Phase 15); isotonic rejected as unstable |
 | AI provider not configured (`AI_PROVIDER=none`) or Ollama not running | Medium | AI-scored items degrade to manual review | Yes (by design) | Configure provider env; manual fallback is built in |
 | Real-model AI scoring untested on this machine (no Ollama runtime) | Medium | Only failure/validation paths exercised live | Yes until deployed | Test with a real provider (Ollama/Gemini) before release |
 | Partial batch failure (invalid AI output / provider error for some items) | Medium | Those items stay unscored until Retry/manual | Yes (by design) | Per-item errors surfaced in UI; no silent score |
 | AI is an assist signal only — never a diagnosis or clinical certainty | Medium | Misinterpretation risk | No (must keep disclaimers) | Keep confidence phrased as model signal; examiner review required |
 | Q11 vision UI not wired (backend milestone only) | **Fixed** | Camera/upload/preview/reviewer UI implemented | — | `Q11PhotoAssessment.tsx` + `POST /mmse/copying/evaluate` |
 | Blank Q11 submissions were reaching the vision model | Fixed | Blank canvas could be scored as correct | — | Pre-check gate added (`has_drawing_content`), verified blank → 400 before provider |
+| 30-item MMSE batch latency near the 180s browser timeout on this hardware | Medium | Occasional 503 on very large batches | Yes (hardware limit) | Larger GPU / smaller model / streaming (needs explicit approval) |
+| No browser/E2E test suite (no Playwright/Cypress) | Low | Manual/headless-CDP regression only | Yes | Not planned; CDP scripts used per-milestone |
 
 ---
 
 ## 12. Known Risks
 
-- **API/ML position-indexing:** Response labels depend on class order `[0,1,2]`; retraining must preserve this or `api.py` must be updated.
-- **Model artifact compatibility:** `best_model.pkl` is tied to the installed scikit-learn version; version drift can break loading or prediction.
-- **Stale SHAP artifacts:** SHAP is training-time/static; do not assume a live per-patient SHAP endpoint exists.
+- **Model/calibrator artifact compatibility:** production artifacts are tied to the installed scikit-learn version; version drift can break loading or prediction. Both are MD5-locked in `api.py` — a mismatch fails loudly at startup (never silently uses a stale artifact).
+- **Raw-vs-calibrated decision integrity:** the screening decision MUST remain based on raw `screening_probability >= 0.40`. Enforced by code + regression tests (flag preservation on all 38 outer subjects; calibrated display never feeds the decision). Do not "improve" the UI by comparing the calibrated number to 0.40.
+- **Stale SHAP artifacts:** SHAP is training-time/static and tied to `binary_lr_latest_visit_v1`; do not assume a live per-patient SHAP endpoint exists.
 - **CORS default:** Without `FRONTEND_URL`/production env, CORS is `["*"]` (wide open) — acceptable locally, review before production.
-- **Deployment constraints:** Heroku Procfile + `runtime.txt` (Python 3.10); model pkl must ship with the deploy. Dual venvs exist (root `.venv`, `backend/venv`).
+- **Deployment constraints:** Heroku Procfile + `runtime.txt` (Python 3.10); model + calibrator pkls must ship with the deploy. Dual venvs exist (root `.venv`, `backend/venv`).
 - **Dependency warnings:** Vite reports large chunk size (Chart.js) and stale browserslist data — cosmetic, not blocking.
-- **Documentation drift:** `README.md` contains stale claims; treat code as authoritative.
+- **Documentation drift:** `README.md` contains stale claims (old 3-class RF contract); treat `AI_CONTEXT.md` and code as authoritative.
+- **Small-sample inference:** n=150 subjects / 38 outer / 14 Converted → wide CIs; metrics are research estimates, not clinical guarantees.
 
 ---
 
@@ -485,6 +520,8 @@ alzheimers_ml_project/
 | 2026-08-15 | `8f00f61` | `fix(ux): persist and restore active assessment session` | Full-session localStorage persistence, refresh-safe restore, Q11-safe saves, restart/re-take semantics |
 | 2026-08-15 | `7c97059` | `fix(ux): allow patient flow with pending examiner sections` | Patient mode continues past Orientation to Place / Q11 as "pending examiner verification"; no fabricated scores; summary withholds finalization until examiner resolves |
 | 2026-08-15 | `d6731e1` | `fix(ux): clarify restart and back navigation` | One authoritative full reset (`handleRestartAssessment` → Assessment Mode); Re-take MMSE = MMSE-only reset; Back = navigation without clearing the session; header has explicit "Re-take MMSE" + "Restart Assessment"; new Backs from MMSE intro and Analysis |
+| 2026-08-15 | `8eac181` | `feat(ml): integrate binary screening model and versioned prediction contract` | Phase 12: replaced 3-class RF with versioned binary LR (threshold 0.40), checksum-locked production artifact + contract, legacy RF backed up to `best_model_rf_legacy.pkl`, frontend ResultCard/Pie/validator updated |
+| 2026-08-15 | `500405f` | `feat(ml): add calibrated screening probability display` | Phase 15: display-only sigmoid calibration (`sigmoid_calibrator_v1`, MD5 `1BF75C442194E83D30847FD0F5B8C044`); `/predict` adds `calibrated_screening_probability` + calibration metadata; raw 0.40 decision preserved (0/38 flag changes); ResultCard shows calibrated number, examiner-only technical details |
 
 ---
 
@@ -513,6 +550,18 @@ alzheimers_ml_project/
 ## 16. Agent Handoff Notes
 
 ### Last Completed Work
+- **Phase 16 — production end-to-end validation + documentation lock (in progress, committed as `chore(ml): validate production screening pipeline`):** Validation-only, no model/feature/threshold/target changes.
+  - **Artifact integrity:** model `binary_lr_latest_visit_v1.pkl` MD5 `8FC95A3838FFF665CF47FA55C4322096`; calibrator `sigmoid_calibrator_v1.pkl` MD5 `1BF75C442194E83D30847FD0F5B8C044`; legacy RF `best_model_rf_legacy.pkl` MD5 `15AA204B9BB50E9F9D8E365359B1646D` — all verified. API checksum validation verified (model mismatch → RuntimeError; calibrator mismatch → safe None).
+  - **E2E `/predict` contract (`test_predict_e2e_phase16.py`):** 5 realistic fixtures (high-risk 74/M/10/23/1 → raw 0.99998 / cal 0.930075 / positive; negative; borderline OAS2_0066-like 62/M/18/30/1 raw 0.398 → negative even though calibrated crosses 0.40 — the hardest invariant; high-MMSE; missing SES → 422 at schema + pipeline imputation verified). Raw/calibrated in [0,1], decision from raw, versions correct.
+  - **Decision preservation (`test_invariants_phase16.py`):** API-level check across all schema-valid outer subjects (37) — production `screening_result` == raw rule; calibrated display vs boundary 0.4082 → **0 decision changes**. Dense [0,1] + monotonic calibrated invariants; artifact version matches model version; checksum matches metadata; calibration failure never changes the raw decision.
+  - **Error handling verified live:** model missing env path → falls back to checksum-verified production artifact; model corrupt → loud RuntimeError; calibrator missing/corrupt → returns None, raw decision unaffected.
+  - **Latency:** `/predict` ~10 ms mean (p95 ~11 ms, p99 ~13 ms) over 100 requests; model+calibrator loaded once at startup, no per-request model loading, no AI provider involved.
+  - **Production/research separation verified:** the API loads ONLY `binary_lr_latest_visit_v1.pkl` + `sigmoid_calibrator_v1.pkl` from `backend/models/production/`; it never loads `best_model.pkl`, `best_model_calibrated.pkl`, or research experiment artifacts.
+  - **Frontend ResultCard verified:** patient mode shows the calibrated number + screening badge (from raw 0.40) + disclaimer, never raw/coefficients/artifact names/calibration internals; examiner mode shows a "Technical Details" block (raw model probability / calibrated display / decision threshold).
+  - **Tests/build:** backend suite **130/130 pass** (56 MMSE + 29 vision + 13 contract + 19 calibration/flag + 13 Phase 16 E2E/invariants); `npm run build` passes. No browser/E2E suite exists (documented); manual/live regression performed (real uvicorn HTTP + live fixture checks).
+  - **Documentation:** `AI_CONTEXT.md` updated to the binary screening production lock (sections 2, 3-ML, 5-/predict contract, 6, 10, 11, 12, 14 milestones, 15, 16).
+- **Phase 15 — production sigmoid display integration (committed `500405f` `feat(ml): add calibrated screening probability display`):** display-only calibration integrated; raw 0.40 decision preserved (0/38 flag changes); fixed case raw 0.99998 → cal 0.930075 → positive; full suite 117/117; `npm run build` passes; pushed to origin/main. See the ML sections above for the full contract.
+- **Phase 12–14 (ML research/integration milestones):** Phase 12 (`8eac181`) replaced the 3-class RF with the versioned binary LR + versioned `/predict` contract + legacy RF backup. Phases 10/11/13/14 (feature feasibility, frozen candidate + bootstrap CIs + SHAP, probability audit, recalibration feasibility) are research-only artifacts under `backend/models/experiments/` — intentionally uncommitted.
 - **Assessment Details range validation (UX-fix milestone, committed `7616853` `fix(ux): clarify assessment detail ranges`):** Frontend-only. Made the allowed ranges explicit and enforced them consistently from ONE config source.
   - **Config single source of truth (`frontend/src/mmse/details.ts`):** `DETAILS_FIELDS` now carries `unit` (`'years'`) next to `min`/`max`; the hardcoded SES `hint` was removed. New `fieldRangeLabel(field)` derives `"50–100 years"` / `"0–25 years"` / `"1–5"` from `min`/`max`/`unit`. New `fieldValid(name, draft)` validates a single field against its config (numeric range, select options, required), and `detailsValid` now iterates `DETAILS_FIELDS` — the old hardcoded `50/100/0/25/1/5` duplicates are gone. New `fieldError(name, draft)` returns `"Enter 50–100 years"` / `"Enter 0–25 years"` / `"Enter 1–5"` / `"Invalid selection"` when a non-empty value is out of range.
   - **UI (`AssessmentDetails.tsx`, `InputField.tsx`, `SelectField.tsx`):** each numeric field's help text is the config-derived range label; out-of-range values show an inline red error + `aria-invalid` (no blur/refresh/second click — Continue is `disabled={!detailsValid}` and re-enables on the next keystroke). Numeric-string behavior unchanged (empty = empty, `012` → `12`, no `0` empty state). Ranges: age 50–100 (49/101 invalid), education_years 0–25 (−1/26 invalid), ses 1–5 (0/6 invalid), sex valid values only.
@@ -616,6 +665,7 @@ alzheimers_ml_project/
 - Earlier milestones: `590ff38` examiner-scored MMSE questionnaire; `ccc45d3` contextual MMSE right panel; `73ef09c` patient-response recording separated from scoring; `1235955` per-item AI-assisted scoring (superseded by the batch workflow).
 
 ### Current State
+- **Production screening pipeline locked (Phase 16):** versioned binary LR `binary_lr_latest_visit_v1` (raw threshold 0.40) + display-only sigmoid calibrator `sigmoid_calibrator_v1`. Both MD5-locked; raw-vs-calibrated decision integrity enforced by tests. Backend 130/130, `npm run build` passes, pushed to `origin/main`.
 - Working tree: the clarified restart/re-take/back navigation milestone is **verified end-to-end** (44/44 CDP checks + 41/41 persistence + 40/40 patient + 6/6 intro-Back) and being committed as `fix(ux): clarify restart and back navigation`; the prior pending-examiner milestone is committed and pushed (`7c97059`). `npm run build` passes; backend tests 85/85 pass (no backend changes); `/predict` contract unchanged. Ollama 0.32.9 + `gemma3:4b` (aliased `gemma3:latest`); vision Q11 round-trip live-verified (analyze ~9s warm; batch ~8–10s warm).
 - **Navigation/reset semantics (current milestone):** `handleRestartAssessment` (`App.tsx`) is the ONE authoritative full reset — `clearSession()` + reset all state + `phase='mode'` → reused by every "Restart Assessment" control (Assessment Details, MMSE Summary footer, Analysis form, and the new MMSE section-header button). `handleRetake` is MMSE-only (preserves mode + details, → MMSE intro, labeled "Re-take MMSE" incl. Analysis). Back is navigation only and never clears the session: Details↔Mode, MMSE intro→Details (new), section→previous section, Summary→Copying, Analysis→Summary (new `handleBackToSummary`). Restart → refresh always lands on Assessment Mode (Tests A/H).
 - **Session persistence:** single versioned key `alzheimers_assessment_session_v1` (`frontend/src/mmse/session.ts`) restores the exact phase/step/state on refresh; one authoritative restore in `App.tsx`; 400ms-debounced saves (skipped when empty); Q11 images never stored (restored as "Choose/Take Photo", AI score kept → total stays accurate); corrupt sessions cleared safely; legacy `alzheimers_assessment_details_v1` migrated once. The pending-examiner state is DERIVED from persisted MMSE state — no schema change.
@@ -623,7 +673,7 @@ alzheimers_ml_project/
 - **Persistence fix (prior milestone):** Re-take cleared the localStorage key but the save-on-change effect re-wrote an empty record; fixed in `frontend/src/App.tsx` with a `detailsValid` guard on the save effect (shipped in `e4cfe16`).
 
 ### Next Recommended Task
-- Commit `fix(ux): clarify restart and back navigation` (`frontend/src/App.tsx`, `frontend/src/components/mmse/MMSEAssessment.tsx`, `frontend/src/components/mmse/MMSEIntroduction.tsx`, `AI_CONTEXT.md`), push, verify clean tree, and deliver the final report.
+- Phase 16 is being completed and committed as `chore(ml): validate production screening pipeline` (adds `test_predict_e2e_phase16.py` + `test_invariants_phase16.py`, updates `AI_CONTEXT.md`), pushed, clean tracked tree, final A–S report delivered.
 - Then consider whether the local Ollama latency is acceptable for production. The full 30-item batch sits close to the 180s browser timeout on this hardware. Options to revisit deliberately (never by removing items): a larger GPU, a smaller/quantized model, streaming progress, or a split-batch strategy. Any of these needs explicit user instruction.
 - Then consider live per-patient SHAP as the next feature.
 
@@ -719,6 +769,9 @@ alzheimers_ml_project/
 - Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
 
 ### Commit
+- Phase 16: `chore(ml): validate production screening pipeline` — `backend/tests/test_predict_e2e_phase16.py`, `backend/tests/test_invariants_phase16.py`, `AI_CONTEXT.md`
+- `500405f` — `feat(ml): add calibrated screening probability display` (Phase 15: calibrator artifact + metadata, api.py, ResultCard, api.ts, contract + calibration tests)
+- `8eac181` — `feat(ml): integrate binary screening model and versioned prediction contract` (Phase 12: versioned binary LR, backup manifest, new /predict contract, frontend, contract tests)
 - `fe4d253` — `fix(ux): improve mic controls and keyboard navigation` (primitives.tsx + MMSEAssessment.tsx + sections.tsx + AI_CONTEXT.md)
 - `e4cfe16` — `fix(ux): complete assessment mode and input safeguards` (App.tsx persistence guard + api.ts VISION_CLIENT_TIMEOUT 120000 + AI_CONTEXT.md)
 - `907483a` — `feat(ux): add assessment modes persistence and input safeguards` (UX milestone, incl. `backend/src/vision_eval.py` Q11 `VISION_TIMEOUT` 120s + `frontend/vite.config.ts` dev host/allowedHosts — deliberate inclusion)
@@ -726,11 +779,19 @@ alzheimers_ml_project/
 - `2b0dc75` — `docs: record deterministic coverage commit hash`
 - `e6fd581` — `fix(ui): start assessment details empty`
 
+### Rollback Procedure (production ML — documented, not executed)
+1. **Sigmoid display calibration (Phase 15):** remove `calibrated_screening_probability` display usage from `frontend/src/components/ResultCard.tsx` + `frontend/src/api.ts`; revert `/predict` to raw-only (drop `calibration` block and `calibrated_*` fields); the raw 0.40 decision is preserved throughout. Keep the LR model and the calibrator artifact (research/display).
+2. **Binary screening (Phase 12):** restore the pre-Phase-12 3-class Random Forest contract from the backed-up API contract (`backend/models/backups/old_api_contract_before_phase12.json`) and legacy RF (`backend/models/backups/best_model_rf_legacy.pkl`, MD5 `15AA204B9BB50E9F9D8E365359B1646D`). **Do NOT roll back to the old RF unless explicitly requested.**
+3. Never delete `binary_lr_latest_visit_v1.pkl` / `sigmoid_calibrator_v1.pkl`; they are the active/locked artifacts.
+
 ### Push Status
 - Pushed to `origin/main` successfully through `fe4d253` (mic controls + keyboard navigation).
 - Working tree clean.
 
 ### Important Warnings
+- **Production ML is locked (Phases 12–16).** Active model = `binary_lr_latest_visit_v1` (raw threshold 0.40). `calibrated_screening_probability` is DISPLAY ONLY — the decision MUST always be computed from raw `screening_probability >= 0.40`. Do NOT compare the calibrated value to 0.40, do NOT rename `screening_probability`, and do NOT call the calibrated number clinically validated. Do not retrain/retune/recalibrate/change threshold/features/target/visit policy without explicit instruction.
+- **Do not silently use a wrong artifact.** `api.py` verifies both production artifact MD5s at startup (`8FC95A3838FFF665CF47FA55C4322096` model, `1BF75C442194E83D30847FD0F5B8C044` calibrator). If you update either artifact, update the locked MD5 and the JSON metadata together.
+- Research experiments live in `backend/models/experiments/` (intentionally uncommitted). Do NOT commit them, patient data, API keys, or temporary plots. Do NOT accidentally ignore `backend/models/production/` artifacts in `.gitignore`.
 - Assessment Details values live in App-level state AND in localStorage (`alzheimers_assessment_details_v1`) — persist ONLY the approved keys (mode, age, sex, education_years, ses), and ONLY when the draft is valid. Restore is a `detailsValid`-guarded read on app start; "Restart Assessment"/Re-take clears the key and returns to the Mode step. NEVER store MMSE answers, Q11 images/blobs, payloads, or API keys in localStorage. Numeric details are string-sanitized (digits only, no leading zeros); convert to numbers ONLY in `detailsToPatientInput` for `/predict`.
 - Assessment Details uses the SAME field semantics/ranges as the original form (Age 50–100, Education 0–25, SES 1–5, Sex 1=Male/0=Female). The `/predict` payload must stay exactly `{age, sex, education_years, mmse, ses}` — do not add fields or change order.
 - No live SHAP endpoint exists — do not assume per-patient SHAP.
@@ -747,7 +808,7 @@ alzheimers_ml_project/
 - `VISION_TIMEOUT` (120s) is separate from the text-MMSE `OLLAMA_BATCH_TIMEOUT` (175s) and frontend 180s budget — do not merge them.
 - Q11 vision accuracy is NOT validated: a real blank-canvas false positive was observed. Confidence is a model signal, not clinical certainty; `review_required` must gate final scoring. Do not claim clinical accuracy.
 - Copying figure is supplied at `frontend/public/mmse-copying-figure.png` (referenced via `COPYING_REFERENCE_IMAGE`); do not substitute or redraw it.
-- `probabilities` in `/predict` are position-indexed (`[0,1,2]`), not keyed by `model.classes_`.
+- The `/predict` contract is the versioned binary screening contract (see section 5); the old 3-class fields (`detection_percentage`, `alzheimers_detected`, `probabilities`, `class_index`, `rule_applied`) were removed in Phase 12 — do not restore them.
 - Do not retrain the model or modify the `/predict` contract without explicit instruction.
 - AI results are an assist signal, never a diagnosis; confidence is a model signal, not clinical certainty. Keep these disclaimers in the UI.
 - AI secrets (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.) must stay backend-only (env/`.env`); never ship them in React or commit them.
