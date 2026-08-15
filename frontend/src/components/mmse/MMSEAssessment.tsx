@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { MMSEState, MmsePhase, SectionId } from '../../mmse/state';
 import {
@@ -16,8 +16,10 @@ import {
 } from '../../mmse/batch';
 import { MMSE_SECTIONS } from '../../mmse/config';
 import { evaluateMmseBatch, extractApiError, isTimeoutError } from '../../api';
+import { useAssessmentMode } from '../../mmse/mode';
 import { MMSEIntroduction } from './MMSEIntroduction';
 import { MMSESummary } from './MMSESummary';
+import { SectionNavigationContext } from './primitives';
 import {
   AttentionSection,
   CopyingSection,
@@ -66,6 +68,15 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
   const [state, setState] = useState<MMSEState>(createInitialMMSEState);
   const [phase, setPhase] = useState<MmsePhase>('collect');
   const [batchError, setBatchError] = useState<BatchErrorInfo | null>(null);
+
+  // Shared "go to next section" path used by BOTH the Next button and the Enter
+  // key (see SectionNavigationContext / PatientResponseInput). Enter must not
+  // advance while the section is incomplete or while AI assessment is running.
+  const goToNext = useCallback(() => {
+    setStep((current) => Math.min(current + 1, SUMMARY_STEP));
+  }, []);
+
+  const mode = useAssessmentMode();
 
   const update = (updater: (draft: MMSEState) => void) => {
     setState((prev) => {
@@ -175,6 +186,35 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
       ? isSectionResponseComplete(section.id, state)
       : isSectionComplete(section.id, state);
 
+  const canAdvance = sectionComplete && !assessing;
+  const navigationValue = { goToNext, canAdvance };
+
+  // Pure Patient mode intentionally cannot complete examiner-dependent sections
+  // (Orientation to Place needs the examiner-set location; Copying needs the
+  // examiner's photo analysis). The blocking logic stays — the message below
+  // explains WHY instead of a generic "Complete all items to continue".
+  const patientBlocked =
+    mode === 'patient' && (section.id === 'orientationPlace' || section.id === 'copying');
+
+  let centerMessage: React.ReactNode;
+  if (assessing) {
+    centerMessage = 'AI assessment in progress…';
+  } else if (patientBlocked && !sectionComplete) {
+    centerMessage = 'An examiner is required for this section';
+  } else if (phase === 'collect') {
+    centerMessage = sectionComplete ? (
+      <span className="text-gray-500">Responses complete</span>
+    ) : (
+      'Complete all items to continue'
+    );
+  } else {
+    centerMessage = sectionComplete ? (
+      <span className="text-gray-500">Section scored</span>
+    ) : (
+      'Resolve the flagged items to continue'
+    );
+  }
+
   return (
     <div className="relative w-full">
       <div className="mb-5">
@@ -200,54 +240,42 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({ onComplete }) =>
         </div>
       </div>
 
-      <motion.div key={step} initial={false}>
-        {assessing && (
-          <div className="mb-4 flex items-center gap-3 rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3">
-            <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-blue-200">Assessing MMSE… please wait.</p>
-          </div>
-        )}
-        <SectionComponent
-          state={state}
-          update={update}
-          phase={phase}
-          onRetry={() => void runBatchAssessment()}
-        />
-      </motion.div>
-
-      <div className="flex items-center justify-between mt-6 gap-3">
-        <button
-          type="button"
-          onClick={() => setStep((current) => Math.max(current - 1, 1))}
-          disabled={step === 1 || assessing}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Back
-        </button>
-        <p className="text-xs text-gray-500 text-center">
-          {assessing ? (
-            'AI assessment in progress…'
-          ) : phase === 'collect' ? (
-            sectionComplete ? (
-              <span className="text-gray-500">Responses complete</span>
-            ) : (
-              'Complete all items to continue'
-            )
-          ) : sectionComplete ? (
-            <span className="text-gray-500">Section scored</span>
-          ) : (
-            'Resolve the flagged items to continue'
+      <SectionNavigationContext.Provider value={navigationValue}>
+        <motion.div key={step} initial={false}>
+          {assessing && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3">
+              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-blue-200">Assessing MMSE… please wait.</p>
+            </div>
           )}
-        </p>
-        <button
-          type="button"
-          onClick={() => setStep((current) => Math.min(current + 1, SUMMARY_STEP))}
-          disabled={!sectionComplete || assessing}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
-        </button>
-      </div>
+          <SectionComponent
+            state={state}
+            update={update}
+            phase={phase}
+            onRetry={() => void runBatchAssessment()}
+          />
+        </motion.div>
+
+        <div className="flex items-center justify-between mt-6 gap-3">
+          <button
+            type="button"
+            onClick={() => setStep((current) => Math.max(current - 1, 1))}
+            disabled={step === 1 || assessing}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Back
+          </button>
+          <p className="text-xs text-gray-500 text-center">{centerMessage}</p>
+          <button
+            type="button"
+            onClick={goToNext}
+            disabled={!sectionComplete || assessing}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
+          </button>
+        </div>
+      </SectionNavigationContext.Provider>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ItemState, MmsePhase, ScoreMark } from '../../mmse/state';
 import { effectiveCorrect } from '../../mmse/state';
@@ -44,6 +44,57 @@ export const inputClass =
 const labelClass =
   'text-[11px] font-semibold uppercase tracking-[0.08em] mb-2';
 
+// ---------------------------------------------------------------------------
+// Section navigation (Enter key): the Next button and the Enter key share one
+// "go to next section" path. The MMSEAssessment step component provides the
+// value; single-line patient response inputs call `goToNext` on Enter when
+// `canAdvance` is true. `canAdvance` is false while the section is incomplete,
+// while AI assessment is running, and on textarea (multiline) inputs so normal
+// Enter still inserts a newline there.
+// ---------------------------------------------------------------------------
+export interface SectionNavigationValue {
+  /** Advance to the next section — the same action as the Next button. */
+  goToNext: () => void;
+  /** True when Enter may advance right now (section complete, not assessing). */
+  canAdvance: boolean;
+}
+
+export const SectionNavigationContext = createContext<SectionNavigationValue>({
+  goToNext: () => {},
+  canAdvance: false,
+});
+
+export const useSectionNavigation = (): SectionNavigationValue =>
+  useContext(SectionNavigationContext);
+
+/** Single-line patient response input; Enter advances when the section is complete. */
+const PatientResponseInput: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  onKeyDown?: (event: React.KeyboardEvent) => void;
+  className?: string;
+}> = ({ value, onChange, placeholder, onKeyDown, className }) => {
+  const { canAdvance, goToNext } = useSectionNavigation();
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    onKeyDown?.(event);
+    if (event.key === 'Enter' && canAdvance) {
+      event.preventDefault();
+      goToNext();
+    }
+  };
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+};
+
 interface PatientResponseProps {
   value: string;
   onChange: (value: string) => void;
@@ -76,13 +127,12 @@ export const PatientResponse: React.FC<PatientResponseProps> = ({
         />
       ) : (
         <div className="relative">
-          <input
-            type="text"
+          <PatientResponseInput
             value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={onKeyDown}
+            onChange={onChange}
             placeholder={placeholder}
-            className={`${inputClass} ${rightSlot ? 'pr-16' : ''}`}
+            onKeyDown={onKeyDown}
+            className={`${inputClass} ${rightSlot ? 'pr-20' : ''}`}
           />
           {rightSlot && (
             <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightSlot}</div>
@@ -163,6 +213,49 @@ export function useSpeechRecognition(onFinalTranscript: (text: string) => void) 
 
   return { supported, listening, error, start, stop };
 }
+
+const MicIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+
+interface MicButtonProps {
+  listening: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * Mic control: the microphone icon AND the word "Mic" live inside the same
+ * clickable control (never icon-only). Toggles to "Stop" while listening.
+ */
+export const MicButton: React.FC<MicButtonProps> = ({ listening, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    aria-label={listening ? 'Stop speech input' : 'Start speech input'}
+    title={listening ? 'Stop speech input' : 'Start speech input'}
+    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 ${
+      listening
+        ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
+        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+    }`}
+  >
+    <MicIcon className="w-3.5 h-3.5 shrink-0" />
+    {listening ? 'Stop' : 'Mic'}
+  </button>
+);
 
 // ---------------------------------------------------------------------------
 // Examiner scoring (manual sections / manual review / override)
@@ -461,17 +554,7 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
   const { supported: speechSupported, listening, error: speechError, start, stop } = speechHook;
 
   const micButton = (
-    <button
-      type="button"
-      onClick={() => (listening ? stop() : start())}
-      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 ${
-        listening
-          ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
-          : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-      }`}
-    >
-      {listening ? 'Stop' : 'Mic'}
-    </button>
+    <MicButton listening={listening} onToggle={() => (listening ? stop() : start())} />
   );
 
   const responseField = (

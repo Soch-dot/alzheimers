@@ -23,6 +23,7 @@ import {
   AIScoredResponse,
   ExaminerInstructions,
   ExaminerScoring,
+  MicButton,
   PatientResponse,
   SectionShell,
   inputClass,
@@ -142,10 +143,20 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update,
           )}
         </div>
       ) : (
-        <p className="text-xs text-gray-500">
-          The examiner sets the assessment location. Answer the questions below as
-          best you can.
-        </p>
+        <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
+            Examiner required
+          </p>
+          <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">
+            This section is scored against the assessment location (state,
+            county, town, building, floor) that only the examiner can set, so
+            it cannot be completed in Patient mode. Answers you record below
+            are kept for practice. Switch to{' '}
+            <span className="text-white font-medium">Examiner</span> or{' '}
+            <span className="text-white font-medium">Examiner + Patient</span>{' '}
+            to run the full assessment.
+          </p>
+        </div>
       )}
 
       {PLACE_ITEMS.map((item) => {
@@ -255,17 +266,7 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
   const { supported: speechSupported, listening, error: speechError, start, stop } = speechHook;
 
   const micButton = (
-    <button
-      type="button"
-      onClick={() => (listening ? stop() : start())}
-      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 ${
-        listening
-          ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
-          : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-      }`}
-    >
-      {listening ? 'Stop' : 'Mic'}
-    </button>
+    <MicButton listening={listening} onToggle={() => (listening ? stop() : start())} />
   );
 
   return (
@@ -800,10 +801,19 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
             }
           />
         ) : (
-          <p className="text-xs text-gray-500">
-            Draw the figure on paper, then show it to the examiner to be
-            photographed.
-          </p>
+          <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
+              Examiner required
+            </p>
+            <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">
+              Copying is scored from a photo that the examiner takes and
+              analyzes, so this section cannot be completed in Patient mode.
+              Draw the figure on paper, then show it to the examiner. Switch to{' '}
+              <span className="text-white font-medium">Examiner</span> or{' '}
+              <span className="text-white font-medium">Examiner + Patient</span>{' '}
+              to run the full assessment.
+            </p>
+          </div>
         )}
       </div>
     </SectionShell>
