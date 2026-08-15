@@ -96,8 +96,6 @@ export const SERIAL_7_EXPECTED: string[] = ['93', '86', '79', '72', '65'];
 
 export const SPELL_WORLD_EXPECTED: string[] = ['D', 'L', 'R', 'O', 'W'];
 
-export const NAMING_ITEMS: string[] = ['Wristwatch', 'Pencil'];
-
 export const REPETITION_PHRASE = 'No ifs, ands, or buts.';
 
 export const THREE_STEP_COMMAND_TEXT =

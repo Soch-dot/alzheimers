@@ -6,7 +6,6 @@ import {
   ATTENTION_TASKS,
   COPYING_REFERENCE_IMAGE,
   LOCATION_FIELDS,
-  NAMING_ITEMS,
   ORIENTATION_TIME_ITEMS,
   PLACE_ITEMS,
   READING_INSTRUCTION,
@@ -17,6 +16,8 @@ import {
   THREE_STEP_COMMAND_TEXT,
   WRITING_PROMPT,
 } from '../../mmse/config';
+import { getNamingObject, NAMING_OBJECTS } from '../../mmse/namingLibrary';
+import { useAssessmentMode } from '../../mmse/mode';
 import {
   AIResultPanel,
   AIScoredResponse,
@@ -76,6 +77,8 @@ export const OrientationTimeSection: React.FC<SectionProps> = ({ state, update, 
 
 export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update, phase, onRetry }) => {
   const counts = sectionResponseCounts(state);
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
   const locationIncomplete = LOCATION_FIELDS.some(
     (field) => state.location[field.key].trim() === ''
   );
@@ -97,46 +100,53 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update,
         </ExaminerInstructions>
       }
     >
-      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5 space-y-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80">
-            Assessment location{' '}
-            <span className="normal-case tracking-normal text-gray-500">
-              — for the examiner, not the patient
-            </span>
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            Enter where this assessment is taking place. These values are the
-            reference answers the AI uses to evaluate the patient&apos;s responses.
-          </p>
+      {examinerView ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5 space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80">
+              Assessment location{' '}
+              <span className="normal-case tracking-normal text-gray-500">
+                — for the examiner, not the patient
+              </span>
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Enter where this assessment is taking place. These values are the
+              reference answers the AI uses to evaluate the patient&apos;s responses.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {LOCATION_FIELDS.map((field) => (
+              <div key={field.key}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">
+                  {field.label}
+                </p>
+                <input
+                  type="text"
+                  value={state.location[field.key]}
+                  onChange={(event) =>
+                    update((draft) => {
+                      draft.location[field.key] = event.target.value;
+                    })
+                  }
+                  placeholder={field.placeholder}
+                  className={inputClass}
+                />
+              </div>
+            ))}
+          </div>
+          {locationIncomplete && (
+            <p className="text-xs text-amber-300/80">
+              Finish setting the assessment location — all five fields are required
+              before the assessment can continue.
+            </p>
+          )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {LOCATION_FIELDS.map((field) => (
-            <div key={field.key}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">
-                {field.label}
-              </p>
-              <input
-                type="text"
-                value={state.location[field.key]}
-                onChange={(event) =>
-                  update((draft) => {
-                    draft.location[field.key] = event.target.value;
-                  })
-                }
-                placeholder={field.placeholder}
-                className={inputClass}
-              />
-            </div>
-          ))}
-        </div>
-        {locationIncomplete && (
-          <p className="text-xs text-amber-300/80">
-            Finish setting the assessment location — all five fields are required
-            before the assessment can continue.
-          </p>
-        )}
-      </div>
+      ) : (
+        <p className="text-xs text-gray-500">
+          The examiner sets the assessment location. Answer the questions below as
+          best you can.
+        </p>
+      )}
 
       {PLACE_ITEMS.map((item) => {
         const placeItem = state.orientationPlace.items[item.key];
@@ -146,7 +156,7 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({ state, update,
             key={item.key}
             question={item.prompt}
             disabledNotice={
-              configured
+              configured || !examinerView
                 ? undefined
                 : 'Set this field in the assessment location above to enable AI assessment.'
             }
@@ -445,6 +455,14 @@ export const DelayedRecallSection: React.FC<SectionProps> = ({ state, update, ph
 
 export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, onRetry }) => {
   const counts = sectionResponseCounts(state);
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
+
+  const slots = [
+    { key: 'watch' as const, objectId: state.naming.watchObject },
+    { key: 'pencil' as const, objectId: state.naming.pencilObject },
+  ];
+
   return (
     <SectionShell
       title="Naming"
@@ -455,33 +473,72 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, on
       kind="ai"
       instructions={
         <ExaminerInstructions>
-          Show each item to the patient and ask: &ldquo;What is this?&rdquo; Record the
-          patient&apos;s response. The AI accepts common synonyms. The patient answers
-          verbally.
+          Two objects are selected for this assessment (one per slot). Show each
+          object to the patient and ask: &ldquo;What is this?&rdquo; Record the patient&apos;s
+          response. The AI accepts common synonyms. The patient answers verbally.
         </ExaminerInstructions>
       }
     >
-      {NAMING_ITEMS.map((item) => {
-        const isWatch = item === 'Wristwatch';
-        const naming = isWatch ? state.naming.watch : state.naming.pencil;
+      {slots.map((slot) => {
+        const object = getNamingObject(slot.objectId);
+        const naming = state.naming[slot.key];
         return (
-          <AIScoredResponse
-            key={item}
-            question="What is this?"
-            hint={`Present the object to the patient: ${item}`}
-            item={naming}
-            update={(patch) =>
-              update((draft) => {
-                if (isWatch) {
-                  Object.assign(draft.naming.watch, patch);
-                } else {
-                  Object.assign(draft.naming.pencil, patch);
-                }
-              })
-            }
-            phase={phase}
-            onRetry={onRetry}
-          />
+          <div
+            key={slot.key}
+            className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4"
+          >
+            {examinerView && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+                  {slot.key === 'watch' ? 'Object 1' : 'Object 2'}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-xs text-gray-500">Object:</label>
+                  <select
+                    value={object.id}
+                    onChange={(event) =>
+                      update((draft) => {
+                        draft.naming[slot.key === 'watch' ? 'watchObject' : 'pencilObject'] =
+                          event.target.value;
+                      })
+                    }
+                    className="px-3 py-1.5 rounded-lg text-sm bg-white/5 border border-white/10 text-gray-300 focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400/50"
+                  >
+                    {NAMING_OBJECTS.map((obj) => (
+                      <option key={obj.id} value={obj.id} className="bg-gray-900 text-white">
+                        {obj.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5 flex flex-col items-center gap-3">
+              <img
+                src={object.image}
+                alt="Object for the patient to name"
+                className="w-36 h-36 object-contain"
+              />
+              <p className="text-sm font-medium text-white">What is this?</p>
+              {examinerView && (
+                <p className="text-xs text-gray-500">Expected answer: {object.expected}</p>
+              )}
+            </div>
+
+            <AIScoredResponse
+              question="What is this?"
+              hint={examinerView ? `Expected answer: ${object.expected}` : undefined}
+              item={naming}
+              update={(patch) =>
+                update((draft) => {
+                  Object.assign(draft.naming[slot.key], patch);
+                })
+              }
+              phase={phase}
+              onRetry={onRetry}
+            />
+          </div>
         );
       })}
     </SectionShell>
@@ -695,6 +752,8 @@ export const WritingSection: React.FC<SectionProps> = ({ state, update, phase, o
 
 export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase }) => {
   const counts = sectionResponseCounts(state);
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
   return (
     <SectionShell
       title="Copying"
@@ -731,14 +790,21 @@ export const CopyingSection: React.FC<SectionProps> = ({ state, update, phase })
             </p>
           </div>
         )}
-        <Q11PhotoAssessment
-          copying={state.copying}
-          updateCopying={(patch) =>
-            update((draft) => {
-              Object.assign(draft.copying, patch);
-            })
-          }
-        />
+        {examinerView ? (
+          <Q11PhotoAssessment
+            copying={state.copying}
+            updateCopying={(patch) =>
+              update((draft) => {
+                Object.assign(draft.copying, patch);
+              })
+            }
+          />
+        ) : (
+          <p className="text-xs text-gray-500">
+            Draw the figure on paper, then show it to the examiner to be
+            photographed.
+          </p>
+        )}
       </div>
     </SectionShell>
   );

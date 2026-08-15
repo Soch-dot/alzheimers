@@ -1,5 +1,6 @@
 import type { ItemState, MMSEState, PlaceKey, SectionId, TimeKey } from './state';
 import { isCopyingFinalized } from './state';
+import { getNamingObject } from './namingLibrary';
 import {
   AI_CONFIDENCE_REVIEW_THRESHOLD,
   ORIENTATION_TIME_ITEMS,
@@ -68,8 +69,8 @@ export function buildBatchItems(
     add(`delayed_recall.${i + 1}`, `Response ${i + 1}`, item, REGISTRATION_OBJECTS[i])
   );
 
-  add('naming.wristwatch', 'What is this?', state.naming.watch, 'wristwatch');
-  add('naming.pencil', 'What is this?', state.naming.pencil, 'pencil');
+  add('naming.wristwatch', 'What is this?', state.naming.watch, getNamingObject(state.naming.watchObject).expected);
+  add('naming.pencil', 'What is this?', state.naming.pencil, getNamingObject(state.naming.pencilObject).expected);
   add('repetition.phrase', 'Repeat the required phrase', state.repetition, REPETITION_PHRASE);
   add('writing.sentence', WRITING_PROMPT, state.writing, '');
 

@@ -9,5 +9,6 @@ export { Layout } from './Layout';
 export { EmptyState } from './EmptyState';
 export { PredictionPieChart } from './PredictionPieChart';
 export { AssessmentDetails } from './AssessmentDetails';
+export { AssessmentModePicker } from './AssessmentModePicker';
 export { MMSEAssessment } from './mmse/MMSEAssessment';
 export { MMSESummary } from './mmse/MMSESummary';

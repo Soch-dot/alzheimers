@@ -1,91 +1,90 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import type { PatientInput } from '../api';
+import type { DetailsDraft } from '../mmse/details';
+import { DETAILS_FIELDS, detailsValid } from '../mmse/details';
 import { FormPanel, InputField, SelectField } from './';
 
 interface AssessmentDetailsProps {
-  formData: PatientInput;
+  formData: DetailsDraft;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  onBack: () => void;
   onContinue: () => void;
 }
 
 /**
  * Pre-MMSE demographic collection (Assessment Details).
- * The values live in App-level `formData` so they survive the whole flow:
- * Assessment Details → MMSE → AI assessment → Summary → Analysis.
- * Continue stays disabled until every field is within the existing ranges.
+ * The values live in App-level `details` so they survive the whole flow:
+ * Mode → Assessment Details → MMSE → AI assessment → Summary → Analysis, and are
+ * restored from localStorage on the next visit.
+ *
+ * Numeric fields are stored as raw strings (empty is a valid draft state), so
+ * the Continue button is enabled IMMEDIATELY once every required field is valid —
+ * there is no stale "0" placeholder. Conversion to numbers happens only when the
+ * final /predict request is built.
  */
 export const AssessmentDetails: React.FC<AssessmentDetailsProps> = ({
   formData,
   onChange,
+  onBack,
   onContinue,
 }) => {
-  const valid =
-    formData.age >= 50 &&
-    formData.age <= 100 &&
-    (formData.sex === 0 || formData.sex === 1) &&
-    formData.education_years >= 0 &&
-    formData.education_years <= 25 &&
-    formData.ses >= 1 &&
-    formData.ses <= 5;
+  const valid = detailsValid(formData);
 
   return (
-    <FormPanel onSubmit={(e) => {
-      e.preventDefault();
-      if (valid) onContinue();
-    }}>
-      <div>
-        <h2 className="text-xl md:text-2xl font-semibold text-white tracking-tight">
-          Assessment Details
-        </h2>
-        <p className="text-sm text-gray-400 font-light mt-2">
-          Enter the information required for the risk assessment.
-        </p>
+    <FormPanel
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onContinue();
+      }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl md:text-2xl font-semibold text-white tracking-tight">
+            Assessment Details
+          </h2>
+          <p className="text-sm text-gray-400 font-light mt-2">
+            Enter the information required for the risk assessment.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-sm text-gray-400 hover:text-white transition-colors shrink-0"
+        >
+          ← Back
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-7">
-        <InputField
-          label="Age"
-          name="age"
-          value={formData.age}
-          onChange={onChange}
-          min={50}
-          max={100}
-          required
-        />
-
-        <SelectField
-          label="Sex"
-          name="sex"
-          value={formData.sex}
-          onChange={onChange}
-          options={[
-            { value: 1, label: 'Male' },
-            { value: 0, label: 'Female' },
-          ]}
-          required
-        />
-
-        <InputField
-          label="Education (years)"
-          name="education_years"
-          value={formData.education_years}
-          onChange={onChange}
-          min={0}
-          max={25}
-          required
-        />
-
-        <InputField
-          label="SES"
-          name="ses"
-          value={formData.ses}
-          onChange={onChange}
-          min={1}
-          max={5}
-          required
-          hint="Range: 1-5"
-        />
+        {DETAILS_FIELDS.map((field) => {
+          const value = formData[field.name];
+          const common = {
+            label: field.required ? `${field.label} *` : field.label,
+            name: field.name,
+            value,
+            onChange,
+            required: field.required,
+          };
+          if (field.type === 'select') {
+            return (
+              <SelectField
+                key={field.name}
+                {...common}
+                options={field.options ?? []}
+              />
+            );
+          }
+          return (
+            <InputField
+              key={field.name}
+              {...common}
+              type="number"
+              min={field.min}
+              max={field.max}
+              hint={field.hint}
+            />
+          );
+        })}
       </div>
 
       <div className="pt-12 border-t border-white/10">

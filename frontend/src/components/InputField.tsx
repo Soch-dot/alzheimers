@@ -38,7 +38,8 @@ export const InputField: React.FC<InputFieldProps> = ({
       </label>
       <div className="relative">
         <input
-          type={type}
+          type="text"
+          inputMode={type === 'number' ? 'numeric' : undefined}
           name={name}
           value={value}
           onChange={onChange}

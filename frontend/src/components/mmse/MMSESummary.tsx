@@ -4,6 +4,7 @@ import type { MMSEScores, MmsePhase, SectionId } from '../../mmse/state';
 import type { SectionResponseCount } from '../../mmse/batch';
 import type { BatchErrorInfo } from './MMSEAssessment';
 import { GlassCard } from './primitives';
+import { useAssessmentMode } from '../../mmse/mode';
 
 interface MMSESummaryProps {
   phase: MmsePhase;
@@ -58,6 +59,9 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
   onRestart,
   onBack,
 }) => {
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
+
   const footerLinks = (
     <div className="flex items-center justify-between">
       <button
@@ -120,9 +124,10 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
               Assess MMSE with AI
             </button>
             <p className="text-xs text-gray-500 text-center">
-              One batch evaluation of all AI-scored responses. You stay in control:
-              low-confidence results are flagged for review and every item can be
-              overridden manually.
+              One batch evaluation of all AI-scored responses.
+              {examinerView
+                ? ' You stay in control: low-confidence results are flagged for review and every item can be overridden manually.'
+                : ''}
             </p>
             {footerLinks}
           </div>
@@ -167,7 +172,7 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
             {batchError?.subtitle && (
               <p className="text-sm text-gray-400 mt-2">{batchError.subtitle}</p>
             )}
-            {batchError?.detail && (
+            {examinerView && batchError?.detail && (
               <details className="mt-4 text-left max-w-md mx-auto">
                 <summary className="cursor-pointer text-xs text-gray-500 hover:text-white transition-colors">
                   View technical details
@@ -178,8 +183,8 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
               </details>
             )}
             <p className="text-sm text-gray-400 font-light mt-3">
-              No score was assigned. You can retry, or score the items manually in
-              each section and continue.
+              No score was assigned. You can retry.
+              {examinerView ? ' Or score the items manually in each section and continue.' : ''}
             </p>
           </div>
           <div className="flex flex-col gap-3">
@@ -217,7 +222,9 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
             <p className="text-lg font-semibold text-amber-300 tracking-tight">
               {title}
             </p>
-            <p className="text-sm text-gray-400 font-light mt-2">{subtitle}</p>
+            <p className="text-sm text-gray-400 font-light mt-2">
+              {examinerView ? subtitle : 'Some responses still need review.'}
+            </p>
           </div>
           <div className="flex flex-col gap-3">
             {needsReassessCount > 0 && (
@@ -225,9 +232,11 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
                 Assess MMSE with AI
               </button>
             )}
-            <button type="button" onClick={onReview} className={ghostButtonClass}>
-              Review items
-            </button>
+            {examinerView && (
+              <button type="button" onClick={onReview} className={ghostButtonClass}>
+                Review items
+              </button>
+            )}
             {footerLinks}
           </div>
         </GlassCard>
@@ -253,17 +262,19 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
         </div>
 
         <div className="space-y-2 mb-8">
-          {BREAKDOWN.map((row) => (
-            <div
-              key={row.title}
-              className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5"
-            >
-              <span className="text-sm text-gray-300">{row.title}</span>
-              <span className="text-sm font-semibold text-white">
-                {scores[row.key]} <span className="text-gray-500 font-normal">/ {row.max}</span>
-              </span>
-            </div>
-          ))}
+          {examinerView
+            ? BREAKDOWN.map((row) => (
+                <div
+                  key={row.title}
+                  className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5"
+                >
+                  <span className="text-sm text-gray-300">{row.title}</span>
+                  <span className="text-sm font-semibold text-white">
+                    {scores[row.key]} <span className="text-gray-500 font-normal">/ {row.max}</span>
+                  </span>
+                </div>
+              ))
+            : null}
         </div>
 
         <p className="text-xs text-gray-500 text-center mb-6">

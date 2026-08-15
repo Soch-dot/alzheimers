@@ -26,7 +26,7 @@ Design rules:
     validation, confidence/review, error normalization, timeout) lives here.
   - Structured output is validated strictly: malformed output => NO score,
     a controlled error, and the item is never silently scored.
-  - Timeouts use a dedicated VISION_TIMEOUT (default 60s) — NOT the text-MMSE
+  - Timeouts use a dedicated VISION_TIMEOUT (default 120s) — NOT the text-MMSE
     OLLAMA_BATCH_TIMEOUT / frontend 180s budget.
   - Confidence is a model signal, not clinical certainty. confidence <
     AI_CONFIDENCE_REVIEW_THRESHOLD (0.7) => review_required = true.
@@ -44,7 +44,7 @@ Config (backend env only; never in React):
     OPENAI_API_KEY         (backend-only)
     OPENAI_VISION_MODEL    (default gpt-4o-mini)
     OPENAI_BASE_URL        (default https://api.openai.com/v1)
-    VISION_TIMEOUT         (default 60)
+    VISION_TIMEOUT         (default 120)
     AI_CONFIDENCE_REVIEW_THRESHOLD (default 0.7)
 
 Only stdlib is used for HTTP (urllib), so no new dependencies are added.
@@ -70,7 +70,7 @@ load_dotenv()
 # Config (backend-only secrets)
 # ---------------------------------------------------------------------------
 VISION_PROVIDER = os.getenv("VISION_PROVIDER", "ollama").strip().lower()
-VISION_TIMEOUT = float(os.getenv("VISION_TIMEOUT", "60"))
+VISION_TIMEOUT = float(os.getenv("VISION_TIMEOUT", "120"))
 AI_CONFIDENCE_REVIEW_THRESHOLD = float(
     os.getenv("AI_CONFIDENCE_REVIEW_THRESHOLD", "0.7")
 )

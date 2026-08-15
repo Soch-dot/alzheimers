@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ItemState, MmsePhase, ScoreMark } from '../../mmse/state';
 import { effectiveCorrect } from '../../mmse/state';
+import { useAssessmentMode } from '../../mmse/mode';
 
 interface GlassCardProps {
   children: React.ReactNode;
@@ -25,6 +26,8 @@ interface ExaminerInstructionsProps {
 }
 
 export const ExaminerInstructions: React.FC<ExaminerInstructionsProps> = ({ children }) => {
+  const mode = useAssessmentMode();
+  if (mode === 'patient') return null;
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 mb-2">
@@ -252,6 +255,8 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
   notAssessedHint = 'Not assessed by AI yet.',
 }) => {
   const [showManual, setShowManual] = useState(false);
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
   const effective = effectiveCorrect(item);
 
   const manualControls = (
@@ -285,41 +290,58 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
   // Not yet assessed (or the item failed and has no score).
   if (!item.aiScore) {
     const empty = (item.response ?? '').trim() === '';
+    // Patient mode: no technical/AI failure details — keep it neutral.
+    if (!examinerView && empty) return <p className="text-xs text-gray-500">Response required</p>;
     return (
       <div>
         {empty ? (
           <p className="text-xs text-gray-500">Response required</p>
         ) : item.error ? (
-          <>
-            <p className="text-xs text-amber-300">AI assessment unavailable for this item.</p>
-            <details className="mt-1">
-              <summary className="cursor-pointer text-[11px] text-gray-600 hover:text-gray-400 transition-colors">
-                View technical details
-              </summary>
-              <pre className="mt-1 text-[10px] leading-relaxed text-gray-600 whitespace-pre-wrap break-words max-h-28 overflow-auto rounded-md bg-white/[0.03] p-2">
-                {item.error}
-              </pre>
-            </details>
-          </>
+          examinerView ? (
+            <>
+              <p className="text-xs text-amber-300">AI assessment unavailable for this item.</p>
+              <details className="mt-1">
+                <summary className="cursor-pointer text-[11px] text-gray-600 hover:text-gray-400 transition-colors">
+                  View technical details
+                </summary>
+                <pre className="mt-1 text-[10px] leading-relaxed text-gray-600 whitespace-pre-wrap break-words max-h-28 overflow-auto rounded-md bg-white/[0.03] p-2">
+                  {item.error}
+                </pre>
+              </details>
+            </>
+          ) : (
+            <p className="text-xs text-amber-300">This response could not be assessed.</p>
+          )
         ) : (
           <p className="text-xs text-gray-500">{notAssessedHint}</p>
         )}
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          {onRetry && item.manual === null && (
+          {examinerView && onRetry && item.manual === null && (
             <button type="button" onClick={onRetry} className={ghostButtonClass}>
               Retry
             </button>
           )}
-          <button type="button" onClick={() => setShowManual((v) => !v)} className={ghostButtonClass}>
-            Score manually
-          </button>
+          {examinerView && (
+            <button type="button" onClick={() => setShowManual((v) => !v)} className={ghostButtonClass}>
+              Score manually
+            </button>
+          )}
         </div>
-        {showManual && manualControls}
+        {examinerView && showManual && manualControls}
       </div>
     );
   }
 
   const ai = item.aiScore;
+  // Patient mode: hide AI score details, confidence, and manual override.
+  if (!examinerView) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-emerald-300">✓</span>
+        <p className="text-xs text-gray-400">Response assessed</p>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
@@ -415,6 +437,11 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
   phase,
   onRetry,
 }) => {
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
+  // Expected answers are examiner-only — never shown to the patient.
+  const visibleHint = examinerView ? hint : undefined;
+
   const onResponseChange = (value: string) => {
     if (value === item.response) return;
     update({
@@ -474,7 +501,7 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
         {top}
         <div>
           <p className="text-sm font-medium text-white">{question}</p>
-          {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+          {visibleHint && <p className="text-xs text-gray-500 mt-1">{visibleHint}</p>}
         </div>
         <PatientResponse value={item.response} onChange={onResponseChange} placeholder={placeholder} />
         {phase === 'collect' && item.response.trim() ? (
@@ -493,7 +520,7 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
       {top}
       <div>
         <p className="text-sm font-medium text-white">{question}</p>
-        {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+        {visibleHint && <p className="text-xs text-gray-500 mt-1">{visibleHint}</p>}
       </div>
       {responseField}
       {phase === 'collect' ? (
@@ -544,6 +571,8 @@ export const SectionShell: React.FC<SectionShellProps> = ({
   responseCount = 0,
   kind,
 }) => {
+  const mode = useAssessmentMode();
+  const examinerView = mode !== 'patient';
   return (
     <motion.div
       initial={{ opacity: 0, x: 24 }}
@@ -566,17 +595,19 @@ export const SectionShell: React.FC<SectionShellProps> = ({
               </span>
             )}
           </div>
-          {phase === 'collect' ? (
-            <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
-              {responseCount} <span className="text-gray-500">/ {maxScore} responses</span>
-            </span>
-          ) : (
-            <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
-              {score} <span className="text-gray-500">/ {maxScore}</span>
-            </span>
-          )}
+          {examinerView ? (
+            phase === 'collect' ? (
+              <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+                {responseCount} <span className="text-gray-500">/ {maxScore} responses</span>
+              </span>
+            ) : (
+              <span className="shrink-0 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+                {score} <span className="text-gray-500">/ {maxScore}</span>
+              </span>
+            )
+          ) : null}
         </div>
-        {instructions && <div className="mb-6">{instructions}</div>}
+        {examinerView && instructions && <div className="mb-6">{instructions}</div>}
         <div className="space-y-3">{children}</div>
       </GlassCard>
     </motion.div>

@@ -90,9 +90,17 @@ export interface CopyingEvaluateResponse {
   review_required: boolean;
 }
 
+/**
+ * Frontend timeout (ms) for the Q11 vision endpoint. Kept comfortably above the
+ * backend VISION_TIMEOUT (120s) because the local vision model can take up to
+ * ~2 minutes. This is the Q11-only budget — the text-MMSE batch keeps its own
+ * separate timeout (see `evaluateMmseBatch`).
+ */
+export const VISION_CLIENT_TIMEOUT = 150000;
+
 export const evaluateCopyingImage = async (
   imageDataUrl: string,
-  timeoutMs = 90000
+  timeoutMs = VISION_CLIENT_TIMEOUT
 ): Promise<CopyingEvaluateResponse> => {
   const response = await axios.post<CopyingEvaluateResponse>(
     `${API_BASE_URL}/mmse/copying/evaluate`,

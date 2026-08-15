@@ -1,13 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { classifyCopyingError, evaluateCopyingImage } from '../../api';
 import type { CopyingState } from '../../mmse/state';
+import { processPhoto } from '../../mmse/imageUtils';
 
 interface Q11PhotoAssessmentProps {
   copying: CopyingState;
   updateCopying: (patch: Partial<CopyingState>) => void;
 }
-
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const ghostButtonClass =
   'px-4 py-1.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed';
@@ -16,10 +15,11 @@ const ghostButtonClass =
  * Question 11 photo flow.
  *
  * The patient copies the reference figure on paper; the examiner takes or
- * uploads a photo. The photo preview is an in-memory data URL that lives only
- * for the current assessment — it is never written to disk, localStorage, or
- * the backend. Analysis runs on the explicit "Analyze Drawing" action (no
- * auto-call) against the dedicated vision endpoint.
+ * uploads a photo. The photo is validated + compressed in the browser
+ * (see imageUtils.ts), the optimized JPEG data URL is previewed, and ONLY that
+ * optimized image is sent to the vision endpoint. The preview lives only for the
+ * current assessment — it is never written to disk, localStorage, or the backend.
+ * Analysis runs on the explicit "Analyze Drawing" action (no auto-call).
  */
 export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
   copying,
@@ -48,34 +48,15 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
       manual: null,
       errorKind: null,
       errorDetail: null,
+      photoInfo: null,
     });
   };
 
-  const readFile = (file: File | null) => {
+  const readFile = async (file: File | null) => {
     setCameraError(null);
     if (!file) return;
-    const supported =
-      /^image\/(jpeg|png|webp)$/i.test(file.type) ||
-      /\.(jpe?g|png|webp)$/i.test(file.name);
-    if (!supported) {
-      updateCopying({
-        status: 'error',
-        errorKind: 'upload',
-        errorDetail: 'Unsupported image type. Use JPEG, PNG, or WebP.',
-      });
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      updateCopying({
-        status: 'error',
-        errorKind: 'upload',
-        errorDetail: 'The image exceeds the maximum allowed size (10 MB).',
-      });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+    try {
+      const { dataUrl, info } = await processPhoto(file);
       updateCopying({
         status: 'photo',
         previewData: dataUrl,
@@ -86,16 +67,15 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
         manual: null,
         errorKind: null,
         errorDetail: null,
+        photoInfo: info,
       });
-    };
-    reader.onerror = () => {
+    } catch (err) {
       updateCopying({
         status: 'error',
         errorKind: 'upload',
-        errorDetail: 'The photo could not be read. Please take or upload another photo.',
+        errorDetail: err instanceof Error ? err.message : 'The photo could not be read.',
       });
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleCapture = async () => {
@@ -391,6 +371,18 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
               {copying.previewName && (
                 <p className="text-[11px] text-gray-600 mt-1.5 break-all">{copying.previewName}</p>
               )}
+              {copying.photoInfo && (
+                <p className="text-[11px] text-gray-600 mt-1.5">
+                  {copying.photoInfo.original.width} × {copying.photoInfo.original.height} ·{' '}
+                  {(copying.photoInfo.original.bytes / (1024 * 1024)).toFixed(1)} MB
+                  {copying.photoInfo.wasOptimized
+                    ? ` → ${copying.photoInfo.optimized.width} × ${copying.photoInfo.optimized.height} · ${(
+                        copying.photoInfo.optimized.bytes /
+                        (1024 * 1024)
+                      ).toFixed(2)} MB (optimized)`
+                    : ''}
+                </p>
+              )}
             </div>
 
             {copying.status === 'photo' && (
@@ -460,17 +452,17 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
       <input
         ref={captureRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         capture="environment"
         className="hidden"
-        onChange={(event) => readFile(event.target.files?.[0] ?? null)}
+        onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
       />
       <input
         ref={uploadRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         className="hidden"
-        onChange={(event) => readFile(event.target.files?.[0] ?? null)}
+        onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
       />
     </div>
   );

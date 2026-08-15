@@ -1,3 +1,5 @@
+import { pickNamingObjects } from './namingLibrary';
+
 export type ScoreMark = boolean | null;
 
 export type AssessmentStatus = 'idle' | 'assessing' | 'assessed' | 'error';
@@ -83,8 +85,14 @@ export interface DelayedRecallState {
 }
 
 export interface NamingState {
+  /** Slot 1 — the batch key stays `naming.wristwatch` for the backend scorer. */
   watch: ItemState;
+  /** Slot 2 — the batch key stays `naming.pencil` for the backend scorer. */
   pencil: ItemState;
+  /** Object library id shown in slot 1 (see namingLibrary.ts). */
+  watchObject: string;
+  /** Object library id shown in slot 2 (see namingLibrary.ts). */
+  pencilObject: string;
 }
 
 export interface CommandState {
@@ -126,6 +134,8 @@ export interface CopyingState {
   manual: boolean | null;
   errorKind: CopyingErrorKind | null;
   errorDetail: string | null;
+  /** Original/optimized dimensions + sizes from client-side processing. */
+  photoInfo: { original: { width: number; height: number; bytes: number }; optimized: { width: number; height: number; bytes: number }; wasOptimized: boolean } | null;
 }
 
 export interface MMSEState {
@@ -172,6 +182,15 @@ function blankLocation(): AssessmentLocation {
   return { state: '', county: '', town: '', building: '', floor: '' };
 }
 
+/**
+ * Two objects for the Naming section, randomly selected from the object library
+ * for the current assessment session (distinct objects, one per slot).
+ */
+function createInitialNamingState(): NamingState {
+  const [watchObject, pencilObject] = pickNamingObjects();
+  return { watch: blank(), pencil: blank(), watchObject, pencilObject };
+}
+
 export function createInitialMMSEState(): MMSEState {
   return {
     location: blankLocation(),
@@ -203,7 +222,7 @@ export function createInitialMMSEState(): MMSEState {
       },
     },
     delayedRecall: { items: [blank(), blank(), blank()] },
-    naming: { watch: blank(), pencil: blank() },
+    naming: createInitialNamingState(),
     repetition: blank(),
     command: { tookPaper: null, foldedPaper: null, placedFloor: null },
     reading: { note: '', correct: null },
@@ -218,6 +237,7 @@ export function createInitialMMSEState(): MMSEState {
       manual: null,
       errorKind: null,
       errorDetail: null,
+      photoInfo: null,
     },
   };
 }
