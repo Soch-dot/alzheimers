@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import type { DetailsDraft } from '../mmse/details';
-import { DETAILS_FIELDS, detailsValid } from '../mmse/details';
+import { DETAILS_FIELDS, detailsValid, fieldError, fieldRangeLabel } from '../mmse/details';
 import { FormPanel, InputField, SelectField } from './';
 
 interface AssessmentDetailsProps {
@@ -83,6 +83,7 @@ export const AssessmentDetails: React.FC<AssessmentDetailsProps> = ({
                 key={field.name}
                 {...common}
                 options={field.options ?? []}
+                error={fieldError(field.name, formData)}
               />
             );
           }
@@ -93,7 +94,8 @@ export const AssessmentDetails: React.FC<AssessmentDetailsProps> = ({
               type="number"
               min={field.min}
               max={field.max}
-              hint={field.hint}
+              hint={fieldRangeLabel(field) ?? undefined}
+              error={fieldError(field.name, formData)}
             />
           );
         })}

@@ -32,17 +32,20 @@ export interface DetailFieldConfig {
   type: 'number' | 'select';
   min?: number;
   max?: number;
-  hint?: string;
+  /** Display unit appended to the range help text (e.g. "50–100 years"). */
+  unit?: string;
   options?: { value: number | string; label: string }[];
 }
 
 /**
  * CONFIGURABLE: required-field metadata for the Assessment Details step.
  * `required` marks which fields are mandatory before the patient can continue
- * to the MMSE. Used by the details form to render and validate the fields.
+ * to the MMSE. This array is the SINGLE SOURCE OF TRUTH for the allowed ranges:
+ * the form renders them as help text and validates against them — no other
+ * component hardcodes these bounds.
  */
 export const DETAILS_FIELDS: DetailFieldConfig[] = [
-  { name: 'age', label: 'Age', required: true, type: 'number', min: 50, max: 100 },
+  { name: 'age', label: 'Age', required: true, type: 'number', min: 50, max: 100, unit: 'years' },
   {
     name: 'sex',
     label: 'Sex',
@@ -60,9 +63,23 @@ export const DETAILS_FIELDS: DetailFieldConfig[] = [
     type: 'number',
     min: 0,
     max: 25,
+    unit: 'years',
   },
-  { name: 'ses', label: 'SES', required: true, type: 'number', min: 1, max: 5, hint: 'Range: 1-5' },
+  { name: 'ses', label: 'SES', required: true, type: 'number', min: 1, max: 5 },
 ];
+
+/**
+ * Human-readable allowed range for a numeric field, derived from its config
+ * (`min`/`max`/`unit`), e.g. "50–100 years", "0–25 years", "1–5". Returns null
+ * for fields without a numeric range. Used for both the field help text and the
+ * out-of-range error message, so the config stays the single source of truth.
+ */
+export function fieldRangeLabel(field: DetailFieldConfig): string | null {
+  if (field.type !== 'number' || field.min === undefined || field.max === undefined) {
+    return null;
+  }
+  return `${field.min}–${field.max}${field.unit ? ' ' + field.unit : ''}`;
+}
 
 /**
  * Sanitize a numeric text input: allow digits only, strip leading zeros
@@ -84,25 +101,38 @@ export function parseField(field: keyof DetailsDraft, draft: DetailsDraft): numb
   return Number.isFinite(n) ? n : null;
 }
 
-/** Whether every required field is present and within range. */
-export function detailsValid(draft: DetailsDraft): boolean {
-  const age = parseField('age', draft);
-  const sex = parseField('sex', draft);
-  const edu = parseField('education_years', draft);
-  const ses = parseField('ses', draft);
+/** Whether a single field is valid per its DETAILS_FIELDS config. */
+export function fieldValid(name: keyof DetailsDraft, draft: DetailsDraft): boolean {
+  const cfg = DETAILS_FIELDS.find((f) => f.name === name);
+  if (!cfg) return false;
+  const raw = draft[name];
+  if (raw === '' || raw === null || raw === undefined) return !cfg.required;
+  if (cfg.type === 'select') {
+    return typeof raw === 'number' && (cfg.options?.some((o) => o.value === raw) ?? false);
+  }
+  const n = parseField(name, draft);
+  if (n === null) return false;
+  if (cfg.min !== undefined && n < cfg.min) return false;
+  if (cfg.max !== undefined && n > cfg.max) return false;
+  return true;
+}
 
-  return (
-    age !== null &&
-    age >= 50 &&
-    age <= 100 &&
-    (sex === 0 || sex === 1) &&
-    edu !== null &&
-    edu >= 0 &&
-    edu <= 25 &&
-    ses !== null &&
-    ses >= 1 &&
-    ses <= 5
-  );
+/** User-facing validation message for a field, or null when it is valid/empty. */
+export function fieldError(name: keyof DetailsDraft, draft: DetailsDraft): string | null {
+  const cfg = DETAILS_FIELDS.find((f) => f.name === name);
+  if (!cfg) return null;
+  const raw = draft[name];
+  if (raw === '' || raw === null || raw === undefined) return null;
+  if (fieldValid(name, draft)) return null;
+  if (cfg.type === 'select') return 'Invalid selection';
+  const range = fieldRangeLabel(cfg);
+  if (range) return `Enter ${range}`;
+  return 'Enter a number';
+}
+
+/** Whether every required field is present and within the configured ranges. */
+export function detailsValid(draft: DetailsDraft): boolean {
+  return DETAILS_FIELDS.every((field) => fieldValid(field.name, draft));
 }
 
 /** Build the numeric /predict payload from the string-based draft. */
