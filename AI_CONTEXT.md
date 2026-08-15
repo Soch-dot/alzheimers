@@ -463,6 +463,9 @@ alzheimers_ml_project/
 | 2026-08-14 | `d717ad3` | `perf(mmse): expand deterministic scoring coverage` | Hybrid MMSE scoring: 29/30 items deterministic, only writing + ambiguous → AI |
 | 2026-08-14 | `2b0dc75` | `docs: record deterministic coverage commit hash` | Expanded deterministic coverage docs |
 | 2026-08-14 | `e6fd581` | `fix(ui): start assessment details empty` | Neutral/invalid defaults so Continue is disabled until valid |
+| 2026-08-14 | `907483a` | `feat(ux): add assessment modes persistence and input safeguards` | Assessment modes, details persistence, Q6 library, Q11 image processing |
+| 2026-08-15 | `e4cfe16` | `fix(ux): complete assessment mode and input safeguards` | Details persistence guard + `VISION_CLIENT_TIMEOUT` 120000 |
+| 2026-08-15 | `fe4d253` | `fix(ux): improve mic controls and keyboard navigation` | Mic icon+text control, Enter-key section advance, Patient-mode Next explainability |
 
 ---
 
@@ -657,7 +660,7 @@ alzheimers_ml_project/
 - Backend (from batch milestone): 11 validation checks + live batch via mock Gemini provider → 200; provider-unreachable → 503; `/predict` 200 (unchanged contract).
 
 ### Commit
-- Pending: `fix(ux): improve mic controls and keyboard navigation` — `frontend/src/components/mmse/primitives.tsx` + `frontend/src/components/mmse/MMSEAssessment.tsx` + `frontend/src/components/mmse/sections.tsx` + `AI_CONTEXT.md`.
+- `fe4d253` — `fix(ux): improve mic controls and keyboard navigation` (primitives.tsx + MMSEAssessment.tsx + sections.tsx + AI_CONTEXT.md)
 - `e4cfe16` — `fix(ux): complete assessment mode and input safeguards` (App.tsx persistence guard + api.ts VISION_CLIENT_TIMEOUT 120000 + AI_CONTEXT.md)
 - `907483a` — `feat(ux): add assessment modes persistence and input safeguards` (UX milestone, incl. `backend/src/vision_eval.py` Q11 `VISION_TIMEOUT` 120s + `frontend/vite.config.ts` dev host/allowedHosts — deliberate inclusion)
 - `d717ad3` — `perf(mmse): expand deterministic scoring coverage`
@@ -665,8 +668,8 @@ alzheimers_ml_project/
 - `e6fd581` — `fix(ui): start assessment details empty`
 
 ### Push Status
-- Pushed to `origin/main` successfully through `e4cfe16` (assessment modes completion).
-- Pending push: `fix(ux): improve mic controls and keyboard navigation` (primitives.tsx + MMSEAssessment.tsx + sections.tsx + AI_CONTEXT.md).
+- Pushed to `origin/main` successfully through `fe4d253` (mic controls + keyboard navigation).
+- Working tree clean.
 
 ### Important Warnings
 - Assessment Details values live in App-level state AND in localStorage (`alzheimers_assessment_details_v1`) — persist ONLY the approved keys (mode, age, sex, education_years, ses), and ONLY when the draft is valid. Restore is a `detailsValid`-guarded read on app start; "Restart Assessment"/Re-take clears the key and returns to the Mode step. NEVER store MMSE answers, Q11 images/blobs, payloads, or API keys in localStorage. Numeric details are string-sanitized (digits only, no leading zeros); convert to numbers ONLY in `detailsToPatientInput` for `/predict`.
