@@ -4,9 +4,11 @@ import { GlassCard } from './primitives';
 
 interface MMSEIntroductionProps {
   onStart: () => void;
+  /** "Back" to Assessment Details (no session clearing). Optional. */
+  onBack?: () => void;
 }
 
-export const MMSEIntroduction: React.FC<MMSEIntroductionProps> = ({ onStart }) => {
+export const MMSEIntroduction: React.FC<MMSEIntroductionProps> = ({ onStart, onBack }) => {
   return (
     <motion.div
       initial={{ opacity: 0, x: -24 }}
@@ -14,6 +16,17 @@ export const MMSEIntroduction: React.FC<MMSEIntroductionProps> = ({ onStart }) =
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
     >
       <GlassCard className="text-center p-8 md:p-10">
+        {onBack && (
+          <div className="flex justify-start -mt-2 mb-4">
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              ← Back
+            </button>
+          </div>
+        )}
         <h2 className="text-2xl md:text-3xl font-semibold text-white tracking-tight">
           MMSE Assessment
         </h2>

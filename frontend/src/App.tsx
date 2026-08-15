@@ -16,6 +16,7 @@ import {
 import { AssessmentModeContext } from './mmse/mode';
 import type { AssessmentMode } from './mmse/mode';
 import { DEFAULT_ASSESSMENT_MODE } from './mmse/mode';
+import { MMSE_SECTIONS } from './mmse/config';
 import {
   EMPTY_DETAILS,
   detailsToPatientInput,
@@ -32,6 +33,8 @@ import {
   type AppPhase,
   type MmseSessionPart,
 } from './mmse/session';
+
+const SUMMARY_STEP = MMSE_SECTIONS.length + 1;
 
 function App() {
   // ------------------ Assessment Mode (first step, persisted) -------------
@@ -128,9 +131,10 @@ function App() {
     []
   );
 
-  // "Re-take Assessment": clear MMSE-specific state (responses, step, AI
-  // results, score), PRESERVE the selected mode and assessment details, and
-  // return to the MMSE intro. This must NOT erase the whole session.
+  // "Re-take MMSE": clear ONLY the MMSE part (responses, AI results, score) —
+  // PRESERVE the selected mode and assessment details — and return to the MMSE
+  // intro. This must NOT return to Assessment Mode and must NOT erase the whole
+  // session. (Separate from "Restart Assessment": do not conflate the two.)
   const handleRetake = () => {
     setMmse(null);
     setMmseScore(null);
@@ -165,9 +169,12 @@ function App() {
     });
   };
 
-  // "Restart Assessment": clear the FULL persisted session and return to
-  // Assessment Mode. Verified by a refresh landing on Assessment Mode.
-  const handleRestart = () => {
+  // THE single authoritative full-reset: wipe the ENTIRE persisted session and
+  // every piece of application state, then return to the FIRST step
+  // (Assessment Mode). Every "Restart Assessment" control reuses this function
+  // so restart always means restart. A subsequent refresh stays on Assessment
+  // Mode because the cleared session key is never re-written (isEmptySession).
+  const handleRestartAssessment = () => {
     clearSession();
     setMode(DEFAULT_ASSESSMENT_MODE);
     setDetails(EMPTY_DETAILS);
@@ -176,6 +183,14 @@ function App() {
     setMmseScore(null);
     setResult(null);
     setError(null);
+  };
+
+  // "Back" from the Analysis form: return to the MMSE Summary WITHOUT clearing
+  // anything. The MMSE part is pinned to the summary step so the score and all
+  // responses are still shown (phase stays 'mmse'; mmseScore/result untouched).
+  const handleBackToSummary = () => {
+    setMmse((prev) => (prev ? { ...prev, step: SUMMARY_STEP } : prev));
+    setPhase('mmse');
   };
 
   const handleAnalyze = async () => {
@@ -245,7 +260,7 @@ function App() {
                   onChange={handleDetailsChange}
                   onBack={() => setPhase('mode')}
                   onContinue={() => setPhase('mmse')}
-                  onRestart={handleRestart}
+                  onRestart={handleRestartAssessment}
                 />
               ) : phase === 'mmse' ? (
                 <MMSEAssessment
@@ -255,6 +270,9 @@ function App() {
                   initialState={mmse?.state}
                   onSessionStateChange={handleMmseStateChange}
                   onHandoffToExaminer={handleHandoffToExaminer}
+                  onRetake={handleRetake}
+                  onRestartAssessment={handleRestartAssessment}
+                  onExitToDetails={() => setPhase('details')}
                 />
               ) : (
                 <FormPanel onSubmit={handleSubmit}>
@@ -269,14 +287,21 @@ function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={handleRetake}
+                      onClick={handleBackToSummary}
                       className="text-sm text-gray-400 hover:text-white transition-colors"
                     >
-                      Re-take Assessment
+                      ← Back
                     </button>
                     <button
                       type="button"
-                      onClick={handleRestart}
+                      onClick={handleRetake}
+                      className="text-sm text-gray-400 hover:text-white transition-colors"
+                    >
+                      Re-take MMSE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRestartAssessment}
                       className="text-sm text-gray-500 hover:text-rose-300 transition-colors"
                     >
                       Restart Assessment

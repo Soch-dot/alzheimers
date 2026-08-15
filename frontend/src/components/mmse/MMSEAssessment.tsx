@@ -48,6 +48,12 @@ interface MMSEAssessmentProps {
   onSessionStateChange?: (step: number, phase: MmsePhase, state: MMSEState) => void;
   /** Hand the assessment over to the examiner (mode -> 'examiner'), preserving all data. */
   onHandoffToExaminer?: () => void;
+  /** "Re-take MMSE": MMSE-only reset (preserves mode + details, back to the intro). */
+  onRetake?: () => void;
+  /** "Restart Assessment": full session reset -> Assessment Mode (App-level authority). */
+  onRestartAssessment?: () => void;
+  /** "Back" from the MMSE intro: return to Assessment Details (no session clearing). */
+  onExitToDetails?: () => void;
 }
 
 const SECTION_COMPONENTS: Record<SectionId, React.FC<SectionProps>> = {
@@ -81,6 +87,9 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   initialState,
   onSessionStateChange,
   onHandoffToExaminer,
+  onRetake,
+  onRestartAssessment,
+  onExitToDetails,
 }) => {
   const [step, setStep] = useState(initialStep ?? INTRO_STEP);
   const [state, setState] = useState<MMSEState>(
@@ -116,12 +125,16 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
     });
   };
 
-  const restart = () => {
-    if (window.confirm('Restart the MMSE assessment? All recorded responses and scores will be cleared.')) {
+  // "Re-take MMSE" (header control): MMSE-only reset. Clears the recorded
+  // responses/AI scores locally AND tells the App to clear the persisted MMSE
+  // part + score (mode/details stay). Never returns to Assessment Mode.
+  const handleReTake = () => {
+    if (window.confirm('Re-take the MMSE? All recorded responses and scores will be cleared.')) {
       setState(createInitialMMSEState());
       setStep(INTRO_STEP);
       setPhase('collect');
       setBatchError(null);
+      onRetake?.();
     }
   };
 
@@ -188,7 +201,12 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   };
 
   if (step === INTRO_STEP) {
-    return <MMSEIntroduction onStart={() => setStep(1)} />;
+    return (
+      <MMSEIntroduction
+        onStart={() => setStep(1)}
+        onBack={onExitToDetails}
+      />
+    );
   }
 
   if (step === SUMMARY_STEP) {
@@ -206,7 +224,7 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
         onAssess={() => void runBatchAssessment()}
         onReview={jumpToReview}
         onContinue={() => onComplete(total)}
-        onRestart={restart}
+        onRestart={onRestartAssessment ?? handleReTake}
         onBack={() => setStep(SUMMARY_STEP - 1)}
         onHandoffToExaminer={onHandoffToExaminer}
       />
@@ -258,13 +276,24 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
             MMSE Assessment · {step} of {MMSE_SECTIONS.length}
           </p>
-          <button
-            type="button"
-            onClick={restart}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            Restart
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleReTake}
+              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Re-take MMSE
+            </button>
+            {onRestartAssessment && (
+              <button
+                type="button"
+                onClick={onRestartAssessment}
+                className="text-xs text-gray-500 hover:text-rose-300 transition-colors"
+              >
+                Restart Assessment
+              </button>
+            )}
+          </div>
         </div>
         <div className="h-1 bg-white/10 rounded-full overflow-hidden">
           <motion.div
