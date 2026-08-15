@@ -1,0 +1,16 @@
+{
+  "note": "Record of the PRE-Phase-12 /predict API contract. The previous implementation remains recoverable via git (backend/src/api.py at HEAD 6b7d39f) and via models/backups/best_model_rf_legacy.pkl. This file records the contract so it is never silently reinterpreted.",
+  "old_model": "backend/models/best_model.pkl (legacy 3-class Random Forest; md5 15AA204B9BB50E9F9D8E365359B1646D)",
+  "old_task": "3-class: Nondemented / Converted / Demented",
+  "old_response_fields": {
+    "alzheimers_detected": "bool; true if predicted class in [Converted, Demented]",
+    "detection_percentage": "float = (P(Converted) + P(Demented)) * 100",
+    "predicted_class": "str in {Nondemented, Converted, Demented}",
+    "class_index": "int 0/1/2",
+    "probabilities": "{Nondemented: float, Converted: float, Demented: float}",
+    "rule_applied": "bool (always false)",
+    "rule_usage_percentage": "float (always 0.0)"
+  },
+  "important": "The old detection_percentage = P(Converted)+P(Demented) MUST NOT be silently reinterpreted as the new binary screening probability. The new contract uses screening_probability explicitly.",
+  "archived_at_commit": "6b7d39f"
+}

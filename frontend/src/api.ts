@@ -12,17 +12,27 @@ export interface PatientInput {
 }
 
 export interface PredictionResponse {
-  alzheimers_detected: boolean;
-  detection_percentage: number;
+  model_version: string;
+  screening_target: string;
+  screening_probability: number;
+  screening_threshold: number;
+  screening_result: 'positive' | 'negative';
   predicted_class: string;
-  class_index: number;
-  probabilities: {
-    Nondemented: number;
-    Converted: number;
-    Demented: number;
+  features: {
+    age: number;
+    sex: number;
+    education_years: number;
+    mmse: number;
+    ses: number;
   };
-  rule_applied?: boolean;
-  rule_usage_percentage?: number;
+  interpretation: {
+    label: string;
+    not_a_diagnosis: boolean;
+  };
+  limitations: {
+    clinical_validation: boolean;
+    prospective_conversion_prediction: boolean;
+  };
 }
 
 export const predictAlzheimers = async (data: PatientInput): Promise<PredictionResponse> => {

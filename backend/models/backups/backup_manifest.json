@@ -1,0 +1,10 @@
+{
+  "manifest_name": "production_model_backup_manifest",
+  "created_utc": "2026-08-15T19:12:08.4139391Z",
+  "original_artifact": "backend/models/best_model.pkl",
+  "original_md5": "15AA204B9BB50E9F9D8E365359B1646D",
+  "backup_artifact": "backend/models/backups/best_model_rf_legacy.pkl",
+  "backup_md5": "15AA204B9BB50E9F9D8E365359B1646D",
+  "backup_verified": true,
+  "note": "Legacy 3-class Random Forest production model; kept for rollback/research. Not the active predictor after Phase 12 integration."
+}

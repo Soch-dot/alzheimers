@@ -8,22 +8,19 @@ interface ResultCardProps {
 }
 
 export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
+  const probability = result.screening_probability;
+  const isPositive = result.screening_result === 'positive';
+
   const probabilityBars = [
     {
       label: 'Nondemented',
-      value: result.probabilities.Nondemented,
+      value: 1 - probability,
       color: 'from-emerald-500 via-emerald-400 to-emerald-500',
       dot: 'bg-emerald-400'
     },
     {
-      label: 'Converted',
-      value: result.probabilities.Converted,
-      color: 'from-amber-500 via-orange-400 to-amber-500',
-      dot: 'bg-amber-400'
-    },
-    {
-      label: 'Demented',
-      value: result.probabilities.Demented,
+      label: 'Dementia-related outcome',
+      value: probability,
       color: 'from-rose-500 via-red-400 to-rose-500',
       dot: 'bg-rose-400'
     }
@@ -43,36 +40,42 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
           Results
         </h2>
 
-        {/* Detection Status */}
+        {/* Screening Status */}
         <div className="mb-10">
           <p className="text-xs font-semibold text-gray-400 mb-4 uppercase tracking-widest">
-            Detection Status
+            Screening Result
           </p>
 
           <span
             className={`px-6 py-3 rounded-xl font-semibold shadow border 
-              ${result.alzheimers_detected ? 'text-rose-400 bg-rose-500/20 border-rose-400/30' :
+              ${isPositive ? 'text-rose-400 bg-rose-500/20 border-rose-400/30' :
                 'text-emerald-400 bg-emerald-500/20 border-emerald-400/30'}`}
           >
-            {result.alzheimers_detected ? "⚠️ Alzheimer's Detected" : "✅ No Alzheimer’s"}
+            {isPositive ? "Positive Screening Result" : "Negative Screening Result"}
           </span>
 
           <p className="text-sm text-gray-400 mt-4">
-            Detection Confidence:
+            {result.interpretation.label}:
             <span className="text-white font-semibold ml-2">
-              {result.detection_percentage.toFixed(1)}%
+              {(probability * 100).toFixed(1)}%
             </span>
+          </p>
+
+          <p className="text-sm text-gray-500 mt-2">
+            Screening threshold: {(result.screening_threshold * 100).toFixed(0)}%
           </p>
         </div>
 
         {/* Predicted Class */}
         <div className="mb-12">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
-            Predicted Class
+            Predicted Outcome
           </p>
 
           <span className="px-7 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-semibold shadow-lg">
-            {result.predicted_class}
+            {result.predicted_class === 'dementia_related'
+              ? 'Dementia-related outcome'
+              : result.predicted_class}
           </span>
         </div>
 
@@ -84,7 +87,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
           className="flex items-center justify-between gap-10 mb-16"
         >
           {/* Pie Chart */}
-          <PredictionPieChart probabilities={result.probabilities} />
+          <PredictionPieChart screeningProbability={probability} />
 
           {/* Legend */}
           <div className="flex flex-col gap-5 text-gray-300 text-sm">
@@ -102,7 +105,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
         {/* Bars */}
         <div className="space-y-9">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-            Class Probabilities
+            Screening Probability
           </p>
 
           {probabilityBars.map((bar, idx) => (
@@ -124,6 +127,16 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Non-diagnostic disclaimer */}
+        <div className="mt-10 p-4 rounded-xl bg-white/5 border border-white/10">
+          <p className="text-xs text-gray-400 leading-relaxed">
+            This is a <span className="text-white font-medium">screening result</span>, not a
+            diagnosis. The probability is a model-estimated screening probability of a
+            dementia-related outcome. It is not clinically validated and does not predict
+            future conversion.
+          </p>
         </div>
 
       </div>
