@@ -12,32 +12,40 @@ import { Pie } from 'react-chartjs-2';
 ChartJS.register(ArcElement, Tooltip, CategoryScale, LinearScale);
 
 interface PredictionPieChartProps {
-  screeningProbability: number;
+  probabilities: {
+    Nondemented: number;
+    Converted: number;
+    Demented: number;
+  };
 }
 
-export const PredictionPieChart: React.FC<PredictionPieChartProps> = ({ screeningProbability }) => {
+export const PredictionPieChart: React.FC<PredictionPieChartProps> = ({ probabilities }) => {
   const chartRef = useRef<ChartJS<'pie'>>(null);
 
   const data = {
-    labels: ['Nondemented', 'Dementia-related outcome'],
+    labels: ['Nondemented', 'Converted', 'Demented'],
     datasets: [
       {
         label: 'Probability',
         data: [
-          (1 - screeningProbability) * 100,
-          screeningProbability * 100,
+          probabilities.Nondemented * 100,
+          probabilities.Converted * 100,
+          probabilities.Demented * 100,
         ],
         backgroundColor: [
           'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
           'rgba(244, 63, 94, 0.8)',
         ],
         borderColor: [
           'rgba(16, 185, 129, 1)',
+          'rgba(251, 191, 36, 1)',
           'rgba(244, 63, 94, 1)',
         ],
         borderWidth: 2,
         hoverBackgroundColor: [
           'rgba(16, 185, 129, 0.95)',
+          'rgba(251, 191, 36, 0.95)',
           'rgba(244, 63, 94, 0.95)',
         ],
       },
@@ -79,7 +87,7 @@ export const PredictionPieChart: React.FC<PredictionPieChartProps> = ({ screenin
 
   useEffect(() => {
     chartRef.current?.update();
-  }, [screeningProbability]);
+  }, [probabilities]);
 
   return (
     <motion.div

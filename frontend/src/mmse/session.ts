@@ -190,24 +190,14 @@ function isDetailsDraftShape(value: unknown): value is DetailsDraft {
 function isPredictionResponse(value: unknown): value is PredictionResponse {
   if (!isRecord(value)) return false;
   return (
-    typeof value.model_version === 'string' &&
-    typeof value.screening_target === 'string' &&
-    typeof value.screening_probability === 'number' &&
-    typeof value.screening_threshold === 'number' &&
-    (value.screening_result === 'positive' || value.screening_result === 'negative') &&
+    typeof value.alzheimers_detected === 'boolean' &&
+    typeof value.detection_percentage === 'number' &&
     typeof value.predicted_class === 'string' &&
-    isRecord(value.features) &&
-    typeof value.features.age === 'number' &&
-    typeof value.features.sex === 'number' &&
-    typeof value.features.education_years === 'number' &&
-    typeof value.features.mmse === 'number' &&
-    typeof value.features.ses === 'number' &&
-    isRecord(value.interpretation) &&
-    typeof value.interpretation.label === 'string' &&
-    value.interpretation.not_a_diagnosis === true &&
-    isRecord(value.limitations) &&
-    value.limitations.clinical_validation === false &&
-    value.limitations.prospective_conversion_prediction === false
+    typeof value.class_index === 'number' &&
+    isRecord(value.probabilities) &&
+    typeof value.probabilities.Nondemented === 'number' &&
+    typeof value.probabilities.Converted === 'number' &&
+    typeof value.probabilities.Demented === 'number'
   );
 }
 

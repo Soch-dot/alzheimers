@@ -2,44 +2,28 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import type { PredictionResponse } from '../api';
 import { PredictionPieChart } from './PredictionPieChart';
-import { isExaminerView, useAssessmentMode } from '../mmse/mode';
 
 interface ResultCardProps {
   result: PredictionResponse;
 }
 
-/** Consistent patient-facing display rule: round to a whole percent. */
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
 export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
-  const mode = useAssessmentMode();
-  const examinerView = isExaminerView(mode);
-
-  // Raw probability is the DECISION source (threshold 0.40). The calibrated
-  // value is DISPLAY ONLY; patients see the calibrated number, never both.
-  const rawProbability = result.screening_probability;
-  const hasCalibrated =
-    typeof result.calibrated_screening_probability === 'number' &&
-    result.calibration?.display_calibrated === true &&
-    result.calibration?.decision_uses_raw_probability === true;
-  const displayProbability = hasCalibrated
-    ? (result.calibrated_screening_probability as number)
-    : rawProbability;
-
-  const isPositive = result.screening_result === 'positive';
-
   const probabilityBars = [
     {
       label: 'Nondemented',
-      value: 1 - displayProbability,
+      value: result.probabilities.Nondemented,
       color: 'from-emerald-500 via-emerald-400 to-emerald-500',
       dot: 'bg-emerald-400'
     },
     {
-      label: 'Dementia-related outcome',
-      value: displayProbability,
+      label: 'Converted',
+      value: result.probabilities.Converted,
+      color: 'from-amber-500 via-orange-400 to-amber-500',
+      dot: 'bg-amber-400'
+    },
+    {
+      label: 'Demented',
+      value: result.probabilities.Demented,
       color: 'from-rose-500 via-red-400 to-rose-500',
       dot: 'bg-rose-400'
     }
@@ -59,42 +43,36 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
           Results
         </h2>
 
-        {/* Screening Status */}
+        {/* Detection Status */}
         <div className="mb-10">
           <p className="text-xs font-semibold text-gray-400 mb-4 uppercase tracking-widest">
-            Screening Result
+            Detection Status
           </p>
 
           <span
             className={`px-6 py-3 rounded-xl font-semibold shadow border 
-              ${isPositive ? 'text-rose-400 bg-rose-500/20 border-rose-400/30' :
+              ${result.alzheimers_detected ? 'text-rose-400 bg-rose-500/20 border-rose-400/30' :
                 'text-emerald-400 bg-emerald-500/20 border-emerald-400/30'}`}
           >
-            {isPositive ? "Positive Screening Result" : "Negative Screening Result"}
+            {result.alzheimers_detected ? "⚠️ Alzheimer's Detected" : "✅ No Alzheimer’s"}
           </span>
 
           <p className="text-sm text-gray-400 mt-4">
-            {result.interpretation.label}:
+            Detection Confidence:
             <span className="text-white font-semibold ml-2">
-              {formatPercent(displayProbability)}
+              {result.detection_percentage.toFixed(1)}%
             </span>
-          </p>
-
-          <p className="text-sm text-gray-500 mt-2">
-            Screening threshold: {formatPercent(result.screening_threshold)}
           </p>
         </div>
 
         {/* Predicted Class */}
         <div className="mb-12">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
-            Predicted Outcome
+            Predicted Class
           </p>
 
           <span className="px-7 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-semibold shadow-lg">
-            {result.predicted_class === 'dementia_related'
-              ? 'Dementia-related outcome'
-              : result.predicted_class}
+            {result.predicted_class}
           </span>
         </div>
 
@@ -106,7 +84,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
           className="flex items-center justify-between gap-10 mb-16"
         >
           {/* Pie Chart */}
-          <PredictionPieChart screeningProbability={displayProbability} />
+          <PredictionPieChart probabilities={result.probabilities} />
 
           {/* Legend */}
           <div className="flex flex-col gap-5 text-gray-300 text-sm">
@@ -114,7 +92,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
               <div key={p.label} className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${p.dot}`} />
                 <span>
-                  {p.label} — {formatPercent(p.value)}
+                  {p.label} — {(p.value * 100).toFixed(1)}%
                 </span>
               </div>
             ))}
@@ -124,7 +102,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
         {/* Bars */}
         <div className="space-y-9">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-            Screening Probability
+            Class Probabilities
           </p>
 
           {probabilityBars.map((bar, idx) => (
@@ -132,7 +110,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
               <div className="flex justify-between text-gray-300">
                 <span>{bar.label}</span>
                 <span className="font-semibold text-white">
-                  {formatPercent(bar.value)}
+                  {(bar.value * 100).toFixed(1)}%
                 </span>
               </div>
 
@@ -146,50 +124,6 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result }) => {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* Examiner-only technical details: raw probability must never be shown
-            to patients (display-only calibration). */}
-        {examinerView && hasCalibrated && (
-          <div className="mt-8 p-4 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-              Technical Details
-            </p>
-            <dl className="space-y-1.5 text-xs text-gray-400">
-              <div className="flex justify-between">
-                <dt>Raw model probability</dt>
-                <dd className="text-gray-200 font-mono">
-                  {(rawProbability * 100).toFixed(1)}%
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Calibrated display probability</dt>
-                <dd className="text-gray-200 font-mono">
-                  {formatPercent(displayProbability)}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Decision threshold (raw)</dt>
-                <dd className="text-gray-200 font-mono">
-                  {formatPercent(result.screening_threshold)}
-                </dd>
-              </div>
-            </dl>
-            <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
-              The screening decision uses the raw probability against the 0.40
-              threshold. The calibrated value is a display-only transformation.
-            </p>
-          </div>
-        )}
-
-        {/* Non-diagnostic disclaimer */}
-        <div className="mt-10 p-4 rounded-xl bg-white/5 border border-white/10">
-          <p className="text-xs text-gray-400 leading-relaxed">
-            This is a <span className="text-white font-medium">screening result</span>, not a
-            diagnosis. The probability is a model-estimated screening probability of a
-            dementia-related outcome. It is not clinically validated and does not predict
-            future conversion.
-          </p>
         </div>
 
       </div>
