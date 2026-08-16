@@ -1,0 +1,21 @@
+{
+  "features": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "class_mapping": {
+    "Nondemented": 0,
+    "Converted": 1,
+    "Demented": 2
+  },
+  "sex_mapping": {
+    "M": 1,
+    "F": 0
+  },
+  "subject_id_column": "Subject ID",
+  "label_column": "group",
+  "notes": "Subject ID is the independent unit and is NOT a model feature."
+}

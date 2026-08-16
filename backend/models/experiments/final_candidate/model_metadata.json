@@ -1,0 +1,79 @@
+{
+  "model_type": "LogisticRegression (experimental binary screening candidate)",
+  "hyperparameters": {
+    "model_type": "LogisticRegression",
+    "C": 10.0,
+    "class_weight": "balanced",
+    "solver": "lbfgs",
+    "max_iter": 3000,
+    "random_state": 42
+  },
+  "feature_order": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "target_mapping": {
+    "0": "Nondemented",
+    "1": "Converted OR Demented"
+  },
+  "threshold": 0.4,
+  "visit_policy": {
+    "single_visit": "If a patient has only one available assessment, that assessment is used.",
+    "multiple_visits": "If multiple assessments are available, the latest assessment by MR Delay is used.",
+    "temporal_ordering": "MR Delay (NOT raw Visit)"
+  },
+  "scientific_note": "Latest-visit classification is not future-conversion prediction because the OASIS Group label is a final subject-level classification.",
+  "probability_semantics": "model-estimated probability of a dementia-related outcome (Nondemented vs Converted/Demented); raw binary LR probability.",
+  "preprocessing": "SimpleImputer(median) -> StandardScaler -> LogisticRegression (fit on training subjects only)",
+  "train_subjects": 112,
+  "outer_test_subjects": 38,
+  "dataset_rows": 373,
+  "dataset_subjects": 150,
+  "training_data": "latest available visit per training subject (112 subjects)",
+  "sklearn_version": "1.7.2",
+  "python_version": "3.10.11",
+  "random_seeds": {
+    "numpy": 42,
+    "cv": 42
+  },
+  "validation_methodology": "Canonical 112/38 subject split (Phase 2); outer 38 untouched until final evaluation; no tuning on outer test.",
+  "missing_data": {
+    "train_latest": {
+      "ses_nan": 7,
+      "mmse_nan": 1,
+      "mmse_nan_subjects": [
+        "OAS2_0181"
+      ],
+      "handling": "SimpleImputer(strategy=median) fitted on TRAINING subjects' latest-visit rows only"
+    },
+    "outer_test_latest": {
+      "ses_nan": 1,
+      "mmse_nan": 0,
+      "mmse_nan_subjects": [],
+      "handling": "SimpleImputer(strategy=median) fitted on TRAINING subjects' latest-visit rows only"
+    }
+  },
+  "excluded_features": [
+    "CDR (target/post-diagnostic leakage)",
+    "eTIV/nWBV/ASF (research-only, not collected by product)",
+    "visit_count",
+    "prev_mmse",
+    "mmse_delta",
+    "future information"
+  ],
+  "training_subject_counts": {
+    "n": 112,
+    "Nondemented": 54,
+    "Converted": 10,
+    "Demented": 48
+  },
+  "outer_test_subject_counts": {
+    "n": 38,
+    "Nondemented": 18,
+    "Converted": 4,
+    "Demented": 16
+  }
+}

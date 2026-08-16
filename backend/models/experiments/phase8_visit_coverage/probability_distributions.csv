@@ -1,0 +1,9 @@
+stage,group,n,min,median,mean,max
+earliest,all,38,0.0487,0.47,0.5096,0.9996
+earliest,Nondemented,18,0.049,0.3004,0.3616,0.9452
+earliest,Converted,4,0.0487,0.1662,0.1532,0.2319
+earliest,Demented,16,0.1865,0.9064,0.7653,0.9996
+latest,all,38,0.0399,0.3747,0.5088,1.0
+latest,Nondemented,18,0.0399,0.1725,0.262,0.912
+latest,Converted,4,0.0991,0.4821,0.5062,0.9615
+latest,Demented,16,0.0928,0.9443,0.7871,1.0

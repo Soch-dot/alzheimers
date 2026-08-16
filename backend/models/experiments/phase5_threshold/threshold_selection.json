@@ -1,0 +1,92 @@
+{
+  "reproducibility": {
+    "python_version": "3.10.11",
+    "sklearn_version": "1.7.2",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "random_seeds": {
+      "numpy": 42,
+      "bootstrap": 42,
+      "cv": 42
+    },
+    "feature_order": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "model": "LogisticRegression (Phase 4 winner)",
+    "model_hyperparameters": {
+      "clf__C": 10.0,
+      "clf__class_weight": "balanced"
+    },
+    "preprocessing": "SimpleImputer(median)->StandardScaler",
+    "calibration": "none (raw probabilities; Phase 4 showed raw best on grouped CV)",
+    "aggregation_method": "subject_probability = mean of visit probabilities",
+    "threshold_sweep": "0.10 to 0.90 step 0.01 on development subject-level OOF",
+    "outer_split": "112 training / 38 test subjects (subject_grouped_baseline/subject_split.json)",
+    "outer_test_used": "exactly once, after threshold frozen"
+  },
+  "selected_rule": "sens_ge_0.80",
+  "selected_threshold": 0.4,
+  "selection_reason": "Screening objective prioritizes sensitivity (priority #1). Selected highest-specificity threshold with development sensitivity >= 0.80 (rule C): threshold=0.40 gives dev sens=0.810, spec=0.778. Rule D (>=0.85) adds ~1 dev subject of sensitivity at the cost of ~15 points of specificity, so rule C is preferred as the usable screening threshold. Youden/max-balacc reported as references.",
+  "decision_rules": {
+    "youden": {
+      "threshold": 0.68,
+      "sensitivity": 0.6379310344827587,
+      "specificity": 0.9814814814814815,
+      "balanced_accuracy": 0.8097062579821201,
+      "youden_j": 0.6194125159642403
+    },
+    "max_balacc": {
+      "threshold": 0.68,
+      "sensitivity": 0.6379310344827587,
+      "specificity": 0.9814814814814815,
+      "balanced_accuracy": 0.8097062579821201,
+      "youden_j": 0.6194125159642403
+    },
+    "sens_ge_0.80": {
+      "threshold": 0.4,
+      "sensitivity": 0.8103448275862069,
+      "specificity": 0.7777777777777778,
+      "balanced_accuracy": 0.7940613026819923,
+      "youden_j": 0.5881226053639845
+    },
+    "sens_ge_0.85": {
+      "threshold": 0.33,
+      "sensitivity": 0.8620689655172413,
+      "specificity": 0.6296296296296297,
+      "balanced_accuracy": 0.7458492975734354,
+      "youden_j": 0.49169859514687086
+    }
+  },
+  "threshold_stability": {
+    "youden": {
+      "mean": 0.5280000000000001,
+      "std": 0.07259476565152616,
+      "min": 0.46,
+      "max": 0.64
+    },
+    "max_balacc": {
+      "mean": 0.5280000000000001,
+      "std": 0.07259476565152616,
+      "min": 0.46,
+      "max": 0.64
+    },
+    "sens_ge_0.80": {
+      "mean": 0.39,
+      "std": 0.047958315233127206,
+      "min": 0.34,
+      "max": 0.46
+    },
+    "sens_ge_0.85": {
+      "mean": 0.34199999999999997,
+      "std": 0.03492849839314596,
+      "min": 0.32,
+      "max": 0.4
+    }
+  },
+  "roc_auc_dev": 0.8962324393358876,
+  "pr_auc_dev": 0.9191772341599429
+}

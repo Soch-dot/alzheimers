@@ -1,0 +1,147 @@
+{
+  "reproducibility": {
+    "random_seeds": {
+      "split": 42,
+      "rf": 42
+    },
+    "sklearn_version": "1.7.2",
+    "python_version": "3.10.11",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "dataset": {
+      "path": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\data\\raw\\Dataset.csv",
+      "row_count": 373,
+      "subject_count": 150
+    },
+    "feature_order": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "class_mapping": {
+      "Nondemented": 0,
+      "Converted": 1,
+      "Demented": 2
+    },
+    "sex_mapping": {
+      "M": 1,
+      "F": 0
+    },
+    "split_method": "subject-level StratifiedShuffleSplit (manual subject table; StratifiedGroupShuffleSplit unavailable in sklearn 1.7.2)",
+    "split_params": {
+      "test_size": 0.25,
+      "random_state": 42
+    },
+    "model": {
+      "type": "sklearn Pipeline",
+      "steps": [
+        "SimpleImputer(strategy='median')",
+        "RandomForestClassifier"
+      ],
+      "config": {
+        "n_estimators": 200,
+        "random_state": 42,
+        "class_weight": {
+          "0": 1,
+          "1": 4,
+          "2": 2
+        }
+      }
+    }
+  },
+  "split": {
+    "train_rows": 281,
+    "test_rows": 92,
+    "train_subjects": 112,
+    "test_subjects": 38,
+    "subject_overlap": 0,
+    "train_subject_class_dist": {
+      "0": 54,
+      "1": 10,
+      "2": 48
+    },
+    "test_subject_class_dist": {
+      "0": 18,
+      "1": 4,
+      "2": 16
+    },
+    "converted_train_subjects": 10,
+    "converted_test_subjects": 4
+  },
+  "metrics": {
+    "accuracy": 0.5978260869565217,
+    "balanced_accuracy": 0.4795339412360689,
+    "macro_precision": 0.472609819121447,
+    "macro_recall": 0.4795339412360689,
+    "macro_f1": 0.474974974974975,
+    "weighted_f1": 0.5960765112939026,
+    "per_class": {
+      "0": {
+        "precision": 0.6511627906976745,
+        "recall": 0.5957446808510638,
+        "f1": 0.6222222222222222,
+        "support_rows": 47,
+        "support_subjects": 18
+      },
+      "1": {
+        "precision": 0.1,
+        "recall": 0.1,
+        "f1": 0.1,
+        "support_rows": 10,
+        "support_subjects": 4
+      },
+      "2": {
+        "precision": 0.6666666666666666,
+        "recall": 0.7428571428571429,
+        "f1": 0.7027027027027027,
+        "support_rows": 35,
+        "support_subjects": 16
+      }
+    },
+    "confusion_matrix": [
+      [
+        28,
+        9,
+        10
+      ],
+      [
+        6,
+        1,
+        3
+      ],
+      [
+        9,
+        0,
+        26
+      ]
+    ],
+    "confusion_matrix_labels": [
+      0,
+      1,
+      2
+    ],
+    "roc_auc_macro_ovr": null,
+    "pr_auc_macro_ovr": null,
+    "pr_auc_per_class_ovr": null,
+    "log_loss_uncalibrated": 1.325533235693883,
+    "probability_range": {
+      "0": {
+        "min": 0.0,
+        "mean": 0.4545006492512886,
+        "max": 1.0
+      },
+      "1": {
+        "min": 0.0,
+        "mean": 0.12577108987914612,
+        "max": 0.82
+      },
+      "2": {
+        "min": 0.0,
+        "mean": 0.4197282608695652,
+        "max": 1.0
+      }
+    }
+  }
+}

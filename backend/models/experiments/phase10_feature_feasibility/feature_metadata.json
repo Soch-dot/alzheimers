@@ -1,0 +1,76 @@
+{
+  "feature_sets": {
+    "Set1_control": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "Set2_+visit_count": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "visit_count"
+    ],
+    "Set3_+time_since_baseline": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "mr_delay"
+    ],
+    "Set4_+prev_mmse_delta": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "prev_mmse",
+      "mmse_delta"
+    ],
+    "Set5_+MRI": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "etiv",
+      "nwbv",
+      "asf"
+    ]
+  },
+  "availability_classification": {
+    "age": "A1: currently available to the product",
+    "sex": "A1: currently available to the product",
+    "education_years": "A1: currently available to the product",
+    "mmse": "A1: currently available to the product",
+    "ses": "A1: currently available to the product",
+    "visit_count": "A2: available to the product (application knows visit history)",
+    "mr_delay": "A3: available (time since first visit is known to the product)",
+    "prev_mmse": "A4: available if a prior visit exists (prediction-time-safe; Phase 6 confirmation)",
+    "mmse_delta": "A4: available if a prior visit exists (prediction-time-safe; Phase 6 confirmation)",
+    "etiv": "B: legitimate per-visit MRI measure; present in OASIS but NOT collected by the product",
+    "nwbv": "B: legitimate per-visit MRI measure; present in OASIS but NOT collected by the product",
+    "asf": "B: legitimate per-visit MRI measure; present in OASIS but NOT collected by the product",
+    "cdr": "PROHIBITED: target/post-diagnostic leakage",
+    "group": "PROHIBITED: final diagnosis/target",
+    "hand": "excluded: constant (all R) in this dataset"
+  },
+  "leakage_audit": {
+    "cdr_used": false,
+    "group_used_as_feature": false,
+    "future_information_used": false,
+    "post_outcome_information_used": false,
+    "model_predictions_as_features": false,
+    "preprocessing_inside_cv": true
+  },
+  "excluded_variables": {
+    "cdr": "target/post-diagnostic leakage",
+    "group": "final diagnosis (target)",
+    "hand": "constant value (R) in all 373 rows"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "base_features": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "longitudinal_features": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses",
+    "mmse_delta",
+    "time_since_previous"
+  ],
+  "longitudinal_features_with_prev_mmse": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses",
+    "prev_mmse",
+    "mmse_delta",
+    "time_since_previous"
+  ],
+  "feature_definitions": {
+    "age": "age at current visit (years)",
+    "sex": "M=1, F=0 (constant per subject)",
+    "education_years": "EDUC, constant per subject",
+    "mmse": "current-visit MMSE (imputed if missing)",
+    "ses": "SES, constant per subject",
+    "prev_mmse": "MMSE at immediately previous visit (MR-Delay-ordered)",
+    "mmse_delta": "current MMSE - previous MMSE",
+    "time_since_previous": "MR Delay(current) - MR Delay(previous) in days"
+  },
+  "forbidden_features": [
+    "final_mmse",
+    "future_mmse",
+    "future_cdr",
+    "future_group",
+    "future_visits",
+    "future_mri",
+    "cdr",
+    "previous_model_prediction",
+    "rate_of_change_in_model_probability"
+  ],
+  "cdr_used_as_feature": false,
+  "model_predictions_used_as_features": false,
+  "temporal_rule": "for a visit at time t, only features from visits <= t are allowed"
+}

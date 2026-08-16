@@ -1,0 +1,5 @@
+n_visits,subjects,positive,negative,earliest_prob_mean,latest_prob_mean,earliest_flagged,latest_flagged,changed_predictions,correct_changes,note
+2,25,15,10,0.5775950245854071,0.6252570611461318,15,16,5,5,
+3,11,5,6,0.34542390378383997,0.3005005154050414,3,2,3,2,
+4,1,0,1,0.3821526199272674,0.1575237428958407,0,0,0,0,descriptive only (small n)
+5,1,0,1,0.7442423564795437,0.2401568844596745,1,0,1,1,descriptive only (small n)

@@ -1,0 +1,40 @@
+{
+  "method": "subject-level bootstrap resampling (resample the 38 outer subjects with replacement)",
+  "n_outer_subjects": 38,
+  "n_bootstraps": 2000,
+  "confidence_level": "95% (percentile)",
+  "seed": 42,
+  "interval_estimates": {
+    "sensitivity": {
+      "point_estimate": 0.7514,
+      "ci_lower_95": 0.5294,
+      "ci_upper_95": 0.9444,
+      "n_bootstraps": 2000
+    },
+    "specificity": {
+      "point_estimate": 0.8336,
+      "ci_lower_95": 0.6316,
+      "ci_upper_95": 1.0,
+      "n_bootstraps": 2000
+    },
+    "balanced_accuracy": {
+      "point_estimate": 0.7925,
+      "ci_lower_95": 0.6527,
+      "ci_upper_95": 0.9167,
+      "n_bootstraps": 2000
+    },
+    "ppv": {
+      "point_estimate": 0.8322,
+      "ci_lower_95": 0.6429,
+      "ci_upper_95": 1.0,
+      "n_bootstraps": 2000
+    },
+    "npv": {
+      "point_estimate": 0.7539,
+      "ci_lower_95": 0.5556,
+      "ci_upper_95": 0.9412,
+      "n_bootstraps": 2000
+    }
+  },
+  "caveat": "n=38 outer subjects; intervals are wide; no population-level statistical certainty claimed."
+}

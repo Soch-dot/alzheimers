@@ -1,0 +1,91 @@
+{
+  "metrics": {
+    "threshold": 0.4,
+    "n": 38,
+    "positive": 20,
+    "negative": 18,
+    "sensitivity": 0.75,
+    "specificity": 0.8333333333333334,
+    "balanced_accuracy": 0.7916666666666667,
+    "ppv": 0.8333333333333334,
+    "npv": 0.75,
+    "f1": 0.7894736842105263,
+    "accuracy": 0.7894736842105263,
+    "roc_auc": 0.8361111111111111,
+    "pr_auc": 0.8918179328411528,
+    "brier": 0.1564886955546856,
+    "logloss": 0.5032837865211307,
+    "tp": 15,
+    "fp": 3,
+    "tn": 15,
+    "fn": 5
+  },
+  "converted": {
+    "total": 4,
+    "detected": 2,
+    "missed": 2,
+    "subjects": [
+      "OAS2_0020",
+      "OAS2_0054",
+      "OAS2_0145",
+      "OAS2_0176"
+    ]
+  },
+  "demented": {
+    "total": 16,
+    "detected": 13,
+    "missed": 3
+  },
+  "nondemented_fp": 3,
+  "bootstrap": {
+    "sensitivity": 0.7514,
+    "specificity": 0.8336,
+    "balanced_accuracy": 0.7925,
+    "ppv": 0.8322,
+    "npv": 0.7539
+  },
+  "bootstrap_ci": {
+    "sensitivity": [
+      0.5294,
+      0.9444
+    ],
+    "specificity": [
+      0.6316,
+      1.0
+    ],
+    "balanced_accuracy": [
+      0.6527,
+      0.9167
+    ],
+    "ppv": [
+      0.6429,
+      1.0
+    ],
+    "npv": [
+      0.5556,
+      0.9412
+    ]
+  },
+  "importance": [
+    {
+      "feature": "mmse",
+      "mean_abs_shap": 3.100877822895317
+    },
+    {
+      "feature": "education_years",
+      "mean_abs_shap": 1.2271694178672539
+    },
+    {
+      "feature": "ses",
+      "mean_abs_shap": 1.1413015479562865
+    },
+    {
+      "feature": "sex",
+      "mean_abs_shap": 0.6532385794289622
+    },
+    {
+      "feature": "age",
+      "mean_abs_shap": 0.3915224076343874
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "threshold": 0.4,
+  "metrics": {
+    "sensitivity": 0.75,
+    "specificity": 0.6666666666666666,
+    "balanced_accuracy": 0.7083333333333333,
+    "ppv": 0.7142857142857143,
+    "npv": 0.7058823529411765,
+    "f1": 0.7317073170731707,
+    "accuracy": 0.7105263157894737
+  },
+  "confusion_matrix": [
+    [
+      12,
+      6
+    ],
+    [
+      5,
+      15
+    ]
+  ],
+  "tp": 15,
+  "fp": 6,
+  "tn": 12,
+  "fn": 5,
+  "n_subjects": 38,
+  "n_rows": 92,
+  "positive_subjects": 20,
+  "negative_subjects": 18,
+  "converted_demented_breakdown": {
+    "Converted": {
+      "subjects": 4,
+      "flagged": 2,
+      "missed": 2
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 13,
+      "missed": 3
+    },
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 6,
+      "missed": 12
+    }
+  },
+  "bootstrap_ci": {
+    "sensitivity": {
+      "mean": 0.7492773778099794,
+      "ci95_lo": 0.5453598484848485,
+      "ci95_hi": 0.9375
+    },
+    "specificity": {
+      "mean": 0.662975521770096,
+      "ci95_lo": 0.42857142857142855,
+      "ci95_hi": 0.875
+    },
+    "balanced_accuracy": {
+      "mean": 0.7061264497900377,
+      "ci95_lo": 0.5526315789473684,
+      "ci95_hi": 0.84593837535014
+    },
+    "ppv": {
+      "mean": 0.7103157289712461,
+      "ci95_lo": 0.5,
+      "ci95_hi": 0.8947368421052632
+    },
+    "npv": {
+      "mean": 0.705612370146475,
+      "ci95_lo": 0.4666666666666667,
+      "ci95_hi": 0.9230769230769231
+    }
+  },
+  "note": "Small-sample (n=38 subjects); CIs approximate and wide."
+}

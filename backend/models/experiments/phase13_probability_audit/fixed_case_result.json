@@ -1,0 +1,13 @@
+{
+  "fixture": {
+    "age": 74,
+    "sex": 1,
+    "education_years": 10,
+    "mmse": 23,
+    "ses": 1
+  },
+  "screening_probability": 0.99998,
+  "screening_result": "positive",
+  "threshold": 0.4,
+  "note": "sanity-check fixture ONLY; not a validation sample."
+}

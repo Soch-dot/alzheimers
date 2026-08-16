@@ -1,0 +1,237 @@
+{
+  "reproducibility": {
+    "python_version": "3.10.11",
+    "sklearn_version": "1.7.2",
+    "xgboost_version": "3.1.2",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "random_seeds": {
+      "numpy": 42,
+      "cv": 42
+    },
+    "n_splits": 5,
+    "cv_splitter": "StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42) grouped by Subject ID",
+    "outer_split_source": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\models\\experiments\\subject_grouped_baseline\\subject_split.json",
+    "feature_order": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "class_mapping": {
+      "Nondemented": 0,
+      "Converted": 1,
+      "Demented": 2
+    },
+    "binary_target_definition": "1 = Converted|Demented, 0 = Nondemented (experimental column; original group untouched)",
+    "binary_threshold": 0.5,
+    "aggregation_method": "subject probability = mean of visit probabilities across visits",
+    "preprocessing": {
+      "LogisticRegression": "SimpleImputer(median)->StandardScaler",
+      "SVM": "SimpleImputer(median)->StandardScaler",
+      "RandomForest": "SimpleImputer(median)",
+      "XGBoost": "SimpleImputer(median)"
+    },
+    "selection_criterion": "balanced accuracy primary; sensitivity/specificity/ROC-AUC secondary"
+  },
+  "binary_winner": "LogisticRegression",
+  "binary_winner_hyperparameters": {
+    "clf__C": 10.0,
+    "clf__class_weight": "balanced"
+  },
+  "selected_calibration": "raw",
+  "calibration_summary": {
+    "raw": {
+      "log_loss": [
+        0.43783067353865535,
+        0.05535665603065195
+      ],
+      "brier": [
+        0.14629192495612148,
+        0.023950429103560517
+      ],
+      "balanced_accuracy": [
+        0.7829322945364925,
+        0.059763234729026254
+      ],
+      "sensitivity": [
+        0.7131983153722283,
+        0.09371897711429238
+      ],
+      "specificity": [
+        0.8526662737007564,
+        0.06819192256375428
+      ]
+    },
+    "sigmoid": {
+      "log_loss": [
+        0.459865756648867,
+        0.058262552500480264
+      ],
+      "brier": [
+        0.15145623160674376,
+        0.025648671014397113
+      ],
+      "balanced_accuracy": [
+        0.769411811188423,
+        0.062103252972562216
+      ],
+      "sensitivity": [
+        0.7076427598166728,
+        0.09984809976573283
+      ],
+      "specificity": [
+        0.8311808625601728,
+        0.08838055407481142
+      ]
+    },
+    "isotonic": {
+      "log_loss": [
+        0.8959364493479669,
+        0.6371012690446163
+      ],
+      "brier": [
+        0.15260180500431003,
+        0.02944774177000904
+      ],
+      "balanced_accuracy": [
+        0.7795890345425578,
+        0.046477321918521185
+      ],
+      "sensitivity": [
+        0.63355629877369,
+        0.09774099099428443
+      ],
+      "specificity": [
+        0.9256217703114255,
+        0.05712544724386995
+      ]
+    }
+  },
+  "binary_subject_level_outer": {
+    "raw": {
+      "accuracy": 0.6842105263157895,
+      "balanced_accuracy": 0.6888888888888889,
+      "sensitivity": 0.6,
+      "specificity": 0.7777777777777778,
+      "ppv": 0.75,
+      "npv": 0.6363636363636364,
+      "f1": 0.6666666666666666,
+      "roc_auc": 0.8222222222222223,
+      "pr_auc": 0.8656986240314626,
+      "brier": 0.17877431707518185,
+      "log_loss": 0.5176554429432035
+    },
+    "calibrated": {
+      "accuracy": 0.6842105263157895,
+      "balanced_accuracy": 0.6888888888888889,
+      "sensitivity": 0.6,
+      "specificity": 0.7777777777777778,
+      "ppv": 0.75,
+      "npv": 0.6363636363636364,
+      "f1": 0.6666666666666666,
+      "roc_auc": 0.8222222222222223,
+      "pr_auc": 0.8656986240314626,
+      "brier": 0.17877431707518185,
+      "log_loss": 0.5176554429432035
+    }
+  },
+  "binary_visit_level_outer": {
+    "raw": {
+      "accuracy": 0.6956521739130435,
+      "balanced_accuracy": 0.6940898345153664,
+      "sensitivity": 0.6222222222222222,
+      "specificity": 0.7659574468085106,
+      "ppv": 0.717948717948718,
+      "npv": 0.6792452830188679,
+      "f1": 0.6666666666666666,
+      "roc_auc": 0.7782505910165485,
+      "pr_auc": 0.8224891166294327,
+      "brier": 0.19727148826420313,
+      "log_loss": 0.5756462851074915
+    },
+    "calibrated": {
+      "accuracy": 0.6956521739130435,
+      "balanced_accuracy": 0.6940898345153664,
+      "sensitivity": 0.6222222222222222,
+      "specificity": 0.7659574468085106,
+      "ppv": 0.717948717948718,
+      "npv": 0.6792452830188679,
+      "f1": 0.6666666666666666,
+      "roc_auc": 0.7782505910165485,
+      "pr_auc": 0.8224891166294327,
+      "brier": 0.19727148826420313,
+      "log_loss": 0.5756462851074915
+    }
+  },
+  "three_class_subject_level_outer": {
+    "accuracy": 0.7105263157894737,
+    "balanced_accuracy": 0.711111111111111,
+    "sensitivity": 0.7,
+    "specificity": 0.7222222222222222,
+    "ppv": 0.7368421052631579,
+    "npv": 0.6842105263157895,
+    "f1": 0.717948717948718,
+    "roc_auc": 0.8083333333333333,
+    "pr_auc": 0.8526034237381197,
+    "brier": 0.19017048216287105,
+    "log_loss": 0.5577494030175134,
+    "balanced_accuracy_3class": 0.49074074074074076,
+    "n_subjects": 38,
+    "n_positive_subjects": 20,
+    "n_negative_subjects": 18
+  },
+  "three_class_per_class_recall": {
+    "Nondemented": 0.7222222222222222,
+    "Converted": 0.0,
+    "Demented": 0.75
+  },
+  "comparison_table": {
+    "property": [
+      "Target",
+      "Independent unit",
+      "Best model (experimental)",
+      "Calibration",
+      "Balanced accuracy (subject-level outer)",
+      "Sensitivity (subject-level outer)",
+      "Specificity (subject-level outer)",
+      "ROC-AUC (subject-level outer)",
+      "PR-AUC (subject-level outer)",
+      "Brier (subject-level outer)",
+      "Converted prediction"
+    ],
+    "3-class": [
+      "Nondemented/Converted/Demented",
+      "subject",
+      "LogisticRegression (Phase 2) + sigmoid (Phase 3)",
+      "sigmoid",
+      "0.7111",
+      "0.7000",
+      "0.7222",
+      "0.8083",
+      "0.8526",
+      "0.1902",
+      "never predicted on outer test (4 subjects)"
+    ],
+    "binary": [
+      "Nondemented / Any dementia",
+      "subject",
+      "LogisticRegression",
+      "raw",
+      "0.6889",
+      "0.6000",
+      "0.7778",
+      "0.8222",
+      "0.8657",
+      "0.1788",
+      "N/A (collapsed into any-dementia)"
+    ]
+  },
+  "notes": [
+    "Subject is the independent unit; visit probabilities aggregated by mean.",
+    "Outer 38-subject test used exactly once after selection.",
+    "Converted outer test has only 4 subjects - statistically unstable.",
+    "No threshold optimization performed; BINARY_THRESHOLD=0.5 fixed for comparison."
+  ]
+}

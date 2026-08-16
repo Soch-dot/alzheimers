@@ -1,0 +1,35 @@
+{
+  "subjects": 38,
+  "changed_prediction": 9,
+  "neg_to_pos": 4,
+  "pos_to_neg": 5,
+  "changes_correct": 8,
+  "changes_incorrect": 1,
+  "prob_change": {
+    "mean": -0.0008242291368411716,
+    "median": -0.008758690061588345,
+    "std": 0.2728748845532703,
+    "min": -0.5040854720198692,
+    "max": 0.793087119499541
+  },
+  "prob_change_by_group": {
+    "Nondemented": {
+      "n": 18,
+      "mean": -0.0995898310508835,
+      "median": -0.025055308251309583
+    },
+    "Converted": {
+      "n": 4,
+      "mean": 0.35300643400378756,
+      "median": 0.3232113917894472
+    },
+    "Demented": {
+      "n": 16,
+      "mean": 0.021829407231299242,
+      "median": -0.0017366830353539586
+    }
+  },
+  "prob_change_positive_mean": 0.0880648125857969,
+  "prob_change_negative_mean": -0.0995898310508835,
+  "note": "probability_change = latest_probability - baseline_probability; described as 'change in screening score between available visits', NOT progression prediction."
+}

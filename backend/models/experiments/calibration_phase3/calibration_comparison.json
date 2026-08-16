@@ -1,0 +1,90 @@
+{
+  "reproducibility": {
+    "python_version": "3.10.11",
+    "sklearn_version": "1.7.2",
+    "random_seeds": {
+      "numpy": 42,
+      "cv": 42
+    },
+    "n_splits": 5,
+    "cv_splitter": "StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42) grouped by Subject ID",
+    "model": "LogisticRegression",
+    "oof_source": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\models\\experiments\\model_benchmark\\oof_predictions.csv",
+    "methods": [
+      "raw",
+      "sigmoid",
+      "isotonic"
+    ],
+    "calibration_note": "per-class one-vs-rest _SigmoidCalibration (Platt) and IsotonicRegression(out_of_bounds='clip'); rows renormalized to sum 1",
+    "selection_criterion": "OOF log loss primary, Brier then ECE tie-breakers; honest second-level subject-grouped CV"
+  },
+  "selected_method": "sigmoid",
+  "comparison": {
+    "raw": {
+      "log_loss": {
+        "mean": 0.735434944022118,
+        "std": 0.10684332101450005
+      },
+      "brier_mean_1vr": {
+        "mean": 0.4243699654488946,
+        "std": 0.05884509703968956
+      },
+      "ece_mean_1vr": {
+        "mean": 0.16278577257411783,
+        "std": 0.01477921487848125
+      },
+      "balanced_accuracy": {
+        "mean": 0.5988049473901507,
+        "std": 0.16608254244920764
+      },
+      "macro_f1": {
+        "mean": 0.5277462002025118,
+        "std": 0.09326567898647696
+      }
+    },
+    "sigmoid": {
+      "log_loss": {
+        "mean": 0.6828439209670165,
+        "std": 0.21082758342807736
+      },
+      "brier_mean_1vr": {
+        "mean": 0.3621476513585281,
+        "std": 0.1027683507803736
+      },
+      "ece_mean_1vr": {
+        "mean": 0.13378865666714707,
+        "std": 0.030110366323314666
+      },
+      "balanced_accuracy": {
+        "mean": 0.6110859284085091,
+        "std": 0.10612823887477198
+      },
+      "macro_f1": {
+        "mean": 0.5270115079042358,
+        "std": 0.031017513285099003
+      }
+    },
+    "isotonic": {
+      "log_loss": {
+        "mean": 1.125634466394058,
+        "std": 0.5710562727737574
+      },
+      "brier_mean_1vr": {
+        "mean": 0.36655976336634777,
+        "std": 0.10408747139270765
+      },
+      "ece_mean_1vr": {
+        "mean": 0.1348364314490585,
+        "std": 0.020223347388871996
+      },
+      "balanced_accuracy": {
+        "mean": 0.6087898151015262,
+        "std": 0.12140270539594036
+      },
+      "macro_f1": {
+        "mean": 0.5271967929687624,
+        "std": 0.03473516099198967
+      }
+    }
+  }
+}

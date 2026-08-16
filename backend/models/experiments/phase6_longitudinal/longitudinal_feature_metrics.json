@@ -1,0 +1,134 @@
+{
+  "model": "C longitudinal feature model (experimental longitudinal screening analysis)",
+  "features_primary": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses",
+    "mmse_delta",
+    "time_since_previous"
+  ],
+  "features_with_prev_mmse": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses",
+    "prev_mmse",
+    "mmse_delta",
+    "time_since_previous"
+  ],
+  "fit_rows": 169,
+  "threshold": 0.4,
+  "subject_level": {
+    "latest_eligible_visit": {
+      "threshold": 0.4,
+      "n": 38,
+      "positive": 20,
+      "negative": 18,
+      "sensitivity": 0.75,
+      "specificity": 0.7777777777777778,
+      "balanced_accuracy": 0.7638888888888888,
+      "ppv": 0.7894736842105263,
+      "npv": 0.7368421052631579,
+      "f1": 0.7692307692307693,
+      "accuracy": 0.7631578947368421,
+      "roc_auc": 0.8333333333333334,
+      "pr_auc": 0.8850729905317205,
+      "brier": 0.17989420380272544,
+      "logloss": 0.521941266696292,
+      "tp": 15,
+      "fp": 4,
+      "tn": 14,
+      "fn": 5
+    },
+    "mean_of_eligible_visits": {
+      "threshold": 0.4,
+      "n": 38,
+      "positive": 20,
+      "negative": 18,
+      "sensitivity": 0.75,
+      "specificity": 0.7222222222222222,
+      "balanced_accuracy": 0.7361111111111112,
+      "ppv": 0.75,
+      "npv": 0.7222222222222222,
+      "f1": 0.75,
+      "accuracy": 0.7368421052631579,
+      "roc_auc": 0.825,
+      "pr_auc": 0.874716427741687,
+      "brier": 0.18334976803593112,
+      "logloss": 0.5309572871220131,
+      "tp": 15,
+      "fp": 5,
+      "tn": 13,
+      "fn": 5
+    },
+    "per_visit_row_level": {
+      "threshold": 0.4,
+      "n": 54,
+      "positive": 25,
+      "negative": 29,
+      "sensitivity": 0.72,
+      "specificity": 0.7586206896551724,
+      "balanced_accuracy": 0.7393103448275862,
+      "ppv": 0.72,
+      "npv": 0.7586206896551724,
+      "f1": 0.72,
+      "accuracy": 0.7407407407407407,
+      "roc_auc": 0.8041379310344827,
+      "pr_auc": 0.8366566444818369,
+      "brier": 0.1871625381044704,
+      "logloss": 0.5472694375608006,
+      "tp": 18,
+      "fp": 7,
+      "tn": 22,
+      "fn": 7
+    }
+  },
+  "converted_demented_breakdown_latest": {
+    "Converted": {
+      "subjects": 4,
+      "flagged": 2,
+      "missed": 2
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 13,
+      "missed": 3
+    },
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 5,
+      "missed": 13
+    }
+  },
+  "bootstrap_ci_latest": {
+    "sensitivity": {
+      "mean": 0.7492773778099794,
+      "ci95_lo": 0.5453598484848485,
+      "ci95_hi": 0.9375
+    },
+    "specificity": {
+      "mean": 0.774294348172772,
+      "ci95_lo": 0.5625,
+      "ci95_hi": 0.9473684210526315
+    },
+    "balanced_accuracy": {
+      "mean": 0.7617858629913757,
+      "ci95_lo": 0.6190361721611722,
+      "ci95_hi": 0.8944444444444444
+    },
+    "ppv": {
+      "mean": 0.7858244459867703,
+      "ci95_lo": 0.5882352941176471,
+      "ci95_hi": 0.95
+    },
+    "npv": {
+      "mean": 0.7367409979248137,
+      "ci95_lo": 0.5263157894736842,
+      "ci95_hi": 0.9375
+    }
+  },
+  "note": "subject-level primary = latest available eligible visit; per-visit is row-level research only."
+}

@@ -1,0 +1,55 @@
+{
+  "dataset_filename": "Dataset.csv",
+  "dataset_row_count": 373,
+  "dataset_subject_count": 150,
+  "canonical_split_path": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\models\\experiments\\subject_grouped_baseline\\subject_split.json",
+  "training_subject_id_hash": {
+    "training_subjects_sha256": "8b97de169673bcdc49de96b3c0b7d9d2c99488c4ec04ef409f4c3497def25f6a",
+    "training_subjects_count": 112
+  },
+  "test_subject_id_hash": {
+    "test_subjects_sha256": "55a4e26019e8b903e554e681b7cc49ffaaaeb76a16fd5aa665354dc34df4d29f",
+    "test_subjects_count": 38
+  },
+  "model_config": {
+    "model_type": "LogisticRegression",
+    "C": 10.0,
+    "class_weight": "balanced",
+    "solver": "lbfgs",
+    "max_iter": 3000,
+    "random_state": 42
+  },
+  "feature_order": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "threshold": 0.4,
+  "visit_policy": "latest available visit by MR Delay; single visit used as-is",
+  "evaluation_metrics": {
+    "sensitivity": 0.75,
+    "specificity": 0.8333333333333334,
+    "balanced_accuracy": 0.7916666666666667,
+    "ppv": 0.8333333333333334,
+    "npv": 0.75,
+    "f1": 0.7894736842105263,
+    "accuracy": 0.7894736842105263,
+    "roc_auc": 0.8361111111111111,
+    "pr_auc": 0.8918179328411528,
+    "brier": 0.1564886955546856,
+    "logloss": 0.5032837865211307,
+    "tp": 15,
+    "tn": 15,
+    "fp": 3,
+    "fn": 5
+  },
+  "code_path": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\src\\final_candidate_phase11.py",
+  "timestamp_utc": "2026-08-15T19:06:03.123424+00:00",
+  "python_version": "3.10.11",
+  "sklearn_version": "1.7.2",
+  "numpy_version": "2.2.6",
+  "shap_version": "0.49.1",
+  "note": "Research-only package; no sensitive patient data beyond subject IDs and model outputs stored."
+}

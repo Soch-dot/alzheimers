@@ -1,0 +1,44 @@
+{
+  "scenario": "A simulated one-visit screening",
+  "description": "earliest visit only; model trained ONLY on earliest visits of 112 training subjects",
+  "threshold": 0.4,
+  "metrics": {
+    "threshold": 0.4,
+    "n": 38,
+    "positive": 20,
+    "negative": 18,
+    "sensitivity": 0.6,
+    "specificity": 0.5555555555555556,
+    "balanced_accuracy": 0.5777777777777777,
+    "ppv": 0.6,
+    "npv": 0.5555555555555556,
+    "f1": 0.6,
+    "accuracy": 0.5789473684210527,
+    "roc_auc": 0.7444444444444444,
+    "pr_auc": 0.8134848564589947,
+    "brier": 0.23819462549430526,
+    "logloss": 0.6693188515078113,
+    "tp": 12,
+    "fp": 8,
+    "tn": 10,
+    "fn": 8
+  },
+  "breakdown": {
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 8,
+      "missed": 10
+    },
+    "Converted": {
+      "subjects": 4,
+      "flagged": 0,
+      "missed": 4
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 12,
+      "missed": 4
+    }
+  },
+  "note": "SIMULATED: dataset contains no true one-visit subjects."
+}

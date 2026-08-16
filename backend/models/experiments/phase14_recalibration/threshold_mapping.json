@@ -1,0 +1,5 @@
+{
+  "raw_threshold": 0.4,
+  "calibrated_threshold_equivalent_sigmoid": 0.4082,
+  "note": "Option A: keep screening decision on RAW probability (raw >= 0.40); calibrated probability displayed via sigmoid. The displayed threshold boundary is the calibrated value at raw 0.40."
+}

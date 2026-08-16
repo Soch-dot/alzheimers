@@ -1,0 +1,22 @@
+{
+  "python_version": "3.10.11",
+  "sklearn_version": "1.7.2",
+  "numpy": "2.2.6",
+  "pandas": "2.3.3",
+  "random_seeds": {
+    "numpy": 42,
+    "bootstrap": 42
+  },
+  "model": "LogisticRegression (Phase 4/5 winner)",
+  "model_hyperparameters": {
+    "clf__C": 10.0,
+    "clf__class_weight": "balanced"
+  },
+  "preprocessing": "SimpleImputer(median)->StandardScaler fit on training rows only",
+  "calibration": "none (raw probabilities)",
+  "threshold": 0.4,
+  "threshold_origin": "frozen from Phase 5 (experimental screening threshold); NOT re-optimized here",
+  "outer_split": "112 training / 38 test subjects (subject_grouped_baseline/subject_split.json)",
+  "setting_A": "baseline: Visit==1 (MR Delay==0), first available visit per subject",
+  "setting_B": "follow-up: Visit>=2, features from visits <= current only (lag-1 previous visit)"
+}

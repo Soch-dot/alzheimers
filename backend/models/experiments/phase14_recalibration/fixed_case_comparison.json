@@ -1,0 +1,16 @@
+{
+  "fixture": {
+    "age": 74,
+    "sex": 1,
+    "education_years": 10,
+    "mmse": 23,
+    "ses": 1
+  },
+  "raw_probability": 0.99998,
+  "sigmoid_probability": 0.930075,
+  "isotonic_probability": 1.0,
+  "raw_screening_decision": "positive",
+  "calibrated_screening_decision_optionA": "positive",
+  "calibrated_threshold_equivalent_to_raw_0.40": 0.4082,
+  "note": "Sanity-check fixture ONLY, not a validation sample. Do not judge the calibration method based on this single case."
+}

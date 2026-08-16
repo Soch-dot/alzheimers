@@ -1,0 +1,94 @@
+{
+  "reproducibility": {
+    "python_version": "3.10.11",
+    "sklearn_version": "1.7.2",
+    "xgboost_version": "3.1.2",
+    "numpy": "2.2.6",
+    "pandas": "2.3.3",
+    "random_seeds": {
+      "numpy": 42,
+      "cv": 42
+    },
+    "n_splits": 5,
+    "cv_splitter": "StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42) grouped by Subject ID",
+    "outer_split_source": "D:\\WebUI\\cursor\\alzheimers_ml_project\\backend\\models\\experiments\\subject_grouped_baseline\\subject_split.json",
+    "feature_order": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "class_mapping": {
+      "Nondemented": 0,
+      "Converted": 1,
+      "Demented": 2
+    },
+    "sex_mapping": {
+      "M": 1,
+      "F": 0
+    },
+    "preprocessing": {
+      "RandomForest": "SimpleImputer(strategy='median') only",
+      "LogisticRegression": "SimpleImputer(strategy='median') -> StandardScaler",
+      "SVM": "SimpleImputer(strategy='median') -> StandardScaler",
+      "XGBoost": "SimpleImputer(strategy='median') only"
+    },
+    "selection_criterion": "balanced accuracy primary; macro F1 -> converted recall/F1 -> log loss -> accuracy/weighted F1"
+  },
+  "comparison": [
+    {
+      "model": "LogisticRegression",
+      "cv_balanced_acc_mean": 0.5988049473901507,
+      "cv_balanced_acc_std": 0.1485487419169691,
+      "cv_macro_f1_mean": 0.5277462002025118,
+      "cv_macro_recall_mean": 0.5576642274275514,
+      "cv_macro_precision_mean": 0.6055585289227372,
+      "cv_weighted_f1_mean": 0.6915059622419022,
+      "cv_accuracy_mean": 0.666538117529736,
+      "cv_log_loss_mean": 0.7377508507528536,
+      "cv_converted_recall_mean": 0.2125,
+      "cv_converted_f1_mean": 0.09019607843137253
+    },
+    {
+      "model": "XGBoost",
+      "cv_balanced_acc_mean": 0.5865565259892047,
+      "cv_balanced_acc_std": 0.08180139487593105,
+      "cv_macro_f1_mean": 0.5231306741262728,
+      "cv_macro_recall_mean": 0.5371876620340855,
+      "cv_macro_precision_mean": 0.5719672463160835,
+      "cv_weighted_f1_mean": 0.7191408450568282,
+      "cv_accuracy_mean": 0.7335656477139121,
+      "cv_log_loss_mean": 0.8304230001056696,
+      "cv_converted_recall_mean": 0.0125,
+      "cv_converted_f1_mean": 0.023529411764705882
+    },
+    {
+      "model": "SVM",
+      "cv_balanced_acc_mean": 0.5779560400640344,
+      "cv_balanced_acc_std": 0.14280620349790257,
+      "cv_macro_f1_mean": 0.4950460534235481,
+      "cv_macro_recall_mean": 0.5325142448326179,
+      "cv_macro_precision_mean": 0.515558171244749,
+      "cv_weighted_f1_mean": 0.6614624281795165,
+      "cv_accuracy_mean": 0.642166705428981,
+      "cv_log_loss_mean": 0.7507944580650944,
+      "cv_converted_recall_mean": 0.2,
+      "cv_converted_f1_mean": 0.05
+    },
+    {
+      "model": "RandomForest",
+      "cv_balanced_acc_mean": 0.5637896638191169,
+      "cv_balanced_acc_std": 0.06794345200398372,
+      "cv_macro_f1_mean": 0.5036347512661911,
+      "cv_macro_recall_mean": 0.5187218751328149,
+      "cv_macro_precision_mean": 0.5519782740072595,
+      "cv_weighted_f1_mean": 0.6891192789467712,
+      "cv_accuracy_mean": 0.7040111439200574,
+      "cv_log_loss_mean": 1.3763702811381548,
+      "cv_converted_recall_mean": 0.0125,
+      "cv_converted_f1_mean": 0.023529411764705882
+    }
+  ],
+  "winner": "LogisticRegression"
+}

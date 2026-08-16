@@ -1,0 +1,62 @@
+{
+  "model": "LogisticRegression",
+  "best_params": {
+    "clf__C": 1.0,
+    "clf__class_weight": {
+      "0": 1,
+      "1": 4,
+      "2": 2
+    }
+  },
+  "accuracy": 0.5,
+  "balanced_accuracy": 0.41570415400202637,
+  "macro_precision": 0.4178762414056532,
+  "macro_recall": 0.41570415400202637,
+  "macro_f1": 0.4081329164662498,
+  "weighted_f1": 0.5076315693163519,
+  "log_loss": 0.8284271272926852,
+  "confusion_matrix": [
+    [
+      19,
+      14,
+      14
+    ],
+    [
+      7,
+      1,
+      2
+    ],
+    [
+      7,
+      2,
+      26
+    ]
+  ],
+  "test_subjects": 38,
+  "test_rows": 92,
+  "converted_test_subjects": 4,
+  "per_class": {
+    "Nondemented": {
+      "precision": 0.5757575757575758,
+      "recall": 0.40425531914893614,
+      "f1": 0.475,
+      "support_rows": 47,
+      "support_subjects": 18
+    },
+    "Converted": {
+      "precision": 0.058823529411764705,
+      "recall": 0.1,
+      "f1": 0.07407407407407407,
+      "support_rows": 10,
+      "support_subjects": 4
+    },
+    "Demented": {
+      "precision": 0.6190476190476191,
+      "recall": 0.7428571428571429,
+      "f1": 0.6753246753246753,
+      "support_rows": 35,
+      "support_subjects": 16
+    }
+  },
+  "roc_auc_macro_ovr": null
+}

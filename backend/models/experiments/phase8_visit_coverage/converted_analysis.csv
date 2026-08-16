@@ -1,0 +1,5 @@
+subject_id,true_binary_label,n_visits,earliest_probability,latest_probability,earliest_predicted,latest_predicted,earliest_decision,latest_decision
+OAS2_0020,1,3,0.2319,0.8279,0,1,missed,flagged
+OAS2_0054,1,2,0.1685,0.9615,0,1,missed,flagged
+OAS2_0145,1,2,0.0487,0.0991,0,0,missed,missed
+OAS2_0176,1,3,0.1639,0.1364,0,0,missed,missed

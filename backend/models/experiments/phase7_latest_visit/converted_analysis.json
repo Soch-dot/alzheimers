@@ -1,0 +1,33 @@
+{
+  "total_subjects_all": {
+    "Converted": 14,
+    "Demented": 64,
+    "Nondemented": 72
+  },
+  "outer_test_subjects": {
+    "Converted": 4,
+    "Demented": 16,
+    "Nondemented": 18
+  },
+  "baseline_flagged": {
+    "Nondemented": 7,
+    "Converted": 0,
+    "Demented": 12
+  },
+  "baseline_missed": {
+    "Nondemented": 11,
+    "Converted": 4,
+    "Demented": 4
+  },
+  "latest_flagged": {
+    "Nondemented": 3,
+    "Converted": 2,
+    "Demented": 13
+  },
+  "latest_missed": {
+    "Nondemented": 15,
+    "Converted": 2,
+    "Demented": 3
+  },
+  "statistical_note": "Converted n=14 total / 4 in outer test; no statistical significance claimed."
+}

@@ -1,0 +1,63 @@
+{
+  "python_version": "3.10.11",
+  "sklearn_version": "1.7.2",
+  "numpy": "2.2.6",
+  "pandas": "2.3.3",
+  "random_seeds": {
+    "numpy": 42,
+    "cv": 42
+  },
+  "feature_sets": {
+    "Set1_control": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses"
+    ],
+    "Set2_+visit_count": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "visit_count"
+    ],
+    "Set3_+time_since_baseline": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "mr_delay"
+    ],
+    "Set4_+prev_mmse_delta": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "prev_mmse",
+      "mmse_delta"
+    ],
+    "Set5_+MRI": [
+      "age",
+      "sex",
+      "education_years",
+      "mmse",
+      "ses",
+      "etiv",
+      "nwbv",
+      "asf"
+    ]
+  },
+  "model_hyperparameters": {
+    "clf__C": 10.0,
+    "clf__class_weight": "balanced"
+  },
+  "threshold": 0.4,
+  "n_folds": 5,
+  "temporal_ordering": "MR Delay",
+  "outer_split": "112 training / 38 test subjects (subject_grouped_baseline/subject_split.json)",
+  "latest_definition": "row with max MR Delay per subject"
+}

@@ -1,0 +1,26 @@
+{
+  "raw_at_0.40": {
+    "sensitivity": 0.75,
+    "specificity": 0.8333333333333334,
+    "balanced_accuracy": 0.7916666666666667,
+    "ppv": 0.8333333333333334,
+    "npv": 0.75,
+    "f1": 0.7894736842105263,
+    "accuracy": 0.7894736842105263,
+    "roc_auc": 0.8361111111111111,
+    "pr_auc": 0.8918179328411528
+  },
+  "sigmoid_at_mapped_threshold": {
+    "sensitivity": 0.75,
+    "specificity": 0.8333333333333334,
+    "balanced_accuracy": 0.7916666666666667,
+    "ppv": 0.8333333333333334,
+    "npv": 0.75,
+    "f1": 0.7894736842105263,
+    "accuracy": 0.7894736842105263,
+    "roc_auc": 0.8361111111111111,
+    "pr_auc": 0.8918179328411528
+  },
+  "flags_changed_outer": 0,
+  "note": "Option A preserves the raw 0.40 decision; sigmoid is monotone so flags should be identical."
+}

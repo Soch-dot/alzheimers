@@ -1,0 +1,21 @@
+{
+  "all_subjects": {
+    "2": 94,
+    "3": 43,
+    "4": 9,
+    "5": 4
+  },
+  "test_subjects": {
+    "2": 25,
+    "3": 11,
+    "4": 1,
+    "5": 1
+  },
+  "product_logic": {
+    "1 visit": "current == baseline == latest (same row); screen with the single available visit.",
+    "2 visits": "screen at latest available visit; no previous visit required.",
+    "3+ visits": "screen at latest available visit; ignore earlier visits for scoring.",
+    "general": "latest_visit = row with max MR Delay for the subject; baseline_visit = row with min MR Delay (0).",
+    "no_history_required": true
+  }
+}

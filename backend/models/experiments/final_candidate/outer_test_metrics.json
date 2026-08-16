@@ -1,0 +1,32 @@
+{
+  "threshold": 0.4,
+  "n": 38,
+  "positive": 20,
+  "negative": 18,
+  "sensitivity": 0.75,
+  "specificity": 0.8333333333333334,
+  "balanced_accuracy": 0.7916666666666667,
+  "ppv": 0.8333333333333334,
+  "npv": 0.75,
+  "f1": 0.7894736842105263,
+  "accuracy": 0.7894736842105263,
+  "roc_auc": 0.8361111111111111,
+  "pr_auc": 0.8918179328411528,
+  "brier": 0.1564886955546856,
+  "logloss": 0.5032837865211307,
+  "tp": 15,
+  "fp": 3,
+  "tn": 15,
+  "fn": 5,
+  "converted": {
+    "total": 4,
+    "detected": 2,
+    "missed": 2
+  },
+  "demented": {
+    "total": 16,
+    "detected": 13,
+    "missed": 3
+  },
+  "nondemented_false_positives": 3
+}

@@ -1,0 +1,7 @@
+setting,threshold,tn,fp,fn,tp,sensitivity,specificity
+A current model @ baseline visit,0.4,11,7,8,12,0.6,0.6111111111111112
+B baseline-only model @ baseline visit,0.4,10,8,8,12,0.6,0.5555555555555556
+A current model @ latest visit,0.4,15,3,5,15,0.75,0.8333333333333334
+C longitudinal (primary) @ latest eligible visit,0.4,14,4,5,15,0.75,0.7777777777777778
+B baseline-only,0.4,10,8,8,12,0.6,0.5555555555555556
+A baseline visit,0.4,11,7,8,12,0.6,0.6111111111111112

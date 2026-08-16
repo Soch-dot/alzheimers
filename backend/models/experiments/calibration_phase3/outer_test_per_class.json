@@ -1,0 +1,14 @@
+{
+  "Nondemented": {
+    "support_subjects": 18,
+    "support_rows": 47
+  },
+  "Converted": {
+    "support_subjects": 4,
+    "support_rows": 10
+  },
+  "Demented": {
+    "support_subjects": 16,
+    "support_rows": 35
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "log_loss": 0.5032837865211307,
+  "brier_score": 0.1564886955546856,
+  "ece_10_bins": 0.1636047578963296,
+  "calibration_slope": 0.07202333214247196,
+  "calibration_intercept": 0.46387147984625693,
+  "calibration_method": "logistic regression of observed outcome on logit(p); unstable / not meaningful at n=38",
+  "n_outer_subjects": 38,
+  "note": "n=38 subject-level observations; all calibration metrics are exploratory, not statistically definitive. No confidence intervals invented."
+}

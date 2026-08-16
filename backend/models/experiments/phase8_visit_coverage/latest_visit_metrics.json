@@ -1,0 +1,43 @@
+{
+  "scenario": "B/C latest-available-visit screening",
+  "description": "latest available visit; Phase 5 winner trained on all visits; Scenario C identical to B",
+  "threshold": 0.4,
+  "metrics": {
+    "threshold": 0.4,
+    "n": 38,
+    "positive": 20,
+    "negative": 18,
+    "sensitivity": 0.75,
+    "specificity": 0.8333333333333334,
+    "balanced_accuracy": 0.7916666666666667,
+    "ppv": 0.8333333333333334,
+    "npv": 0.75,
+    "f1": 0.7894736842105263,
+    "accuracy": 0.7894736842105263,
+    "roc_auc": 0.8333333333333334,
+    "pr_auc": 0.8897126696832582,
+    "brier": 0.15278460069942942,
+    "logloss": 0.47067790407031557,
+    "tp": 15,
+    "fp": 3,
+    "tn": 15,
+    "fn": 5
+  },
+  "breakdown": {
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 3,
+      "missed": 15
+    },
+    "Converted": {
+      "subjects": 4,
+      "flagged": 2,
+      "missed": 2
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 13,
+      "missed": 3
+    }
+  }
+}

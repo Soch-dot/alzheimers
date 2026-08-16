@@ -1,0 +1,63 @@
+{
+  "method": "sigmoid",
+  "raw": {
+    "log_loss": 0.8284271272926852,
+    "brier_mean_1vr": 0.5235045868452929,
+    "ece_mean_1vr": 0.169358113470271,
+    "accuracy": 0.5,
+    "balanced_accuracy": 0.41570415400202637,
+    "macro_f1": 0.4081329164662498,
+    "weighted_f1": 0.5076315693163519,
+    "n_subjects": 38,
+    "n_rows": 92
+  },
+  "calibrated": {
+    "log_loss": 0.760587431270905,
+    "brier_mean_1vr": 0.44892848223169934,
+    "ece_mean_1vr": 0.09329395172676326,
+    "accuracy": 0.6630434782608695,
+    "balanced_accuracy": 0.4934143870314083,
+    "macro_f1": 0.46593426465934257,
+    "weighted_f1": 0.6247560134214731,
+    "n_subjects": 38,
+    "n_rows": 92
+  },
+  "raw_confusion_matrix": [
+    [
+      19,
+      14,
+      14
+    ],
+    [
+      7,
+      1,
+      2
+    ],
+    [
+      7,
+      2,
+      26
+    ]
+  ],
+  "calibrated_confusion_matrix": [
+    [
+      36,
+      0,
+      11
+    ],
+    [
+      8,
+      0,
+      2
+    ],
+    [
+      10,
+      0,
+      25
+    ]
+  ],
+  "n_test_subjects": 38,
+  "n_test_rows": 92,
+  "converted_test_subjects": 4,
+  "note": "Converted outer-test metrics statistically unstable (n=4 subjects)"
+}

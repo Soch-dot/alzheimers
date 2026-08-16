@@ -1,0 +1,7 @@
+group,subjects,age_median,sex_M_fraction,education_median,ses_median,mmse_median,mmse_min,visit_count_median,mr_delay_latest_median,mmse_change_median,prob_median
+C_demented_detected,13,80.0,0.46153846153846156,14.0,3.0,24.0,15.0,2.0,578.0,0.0,0.990326737883776
+E_nondemented_rejected,15,79.0,0.26666666666666666,16.0,2.0,29.0,27.0,3.0,1340.0,0.0,0.15427736752054705
+A_converted_detected,2,85.5,0.5,19.0,1.0,25.0,24.0,2.5,1204.5,-4.0,0.8947164756093082
+F_nondemented_fp,3,70.0,1.0,14.0,3.0,28.0,27.0,2.0,726.0,1.0,0.6899776039556014
+D_demented_missed,3,73.0,1.0,16.0,3.0,30.0,28.0,3.0,1343.0,1.0,0.2351729126941271
+B_converted_missed,2,81.0,0.5,16.0,2.5,29.5,29.0,2.5,1669.0,-0.5,0.11776362233169288

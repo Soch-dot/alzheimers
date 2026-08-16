@@ -1,0 +1,12 @@
+property,3-class,binary
+Target,Nondemented/Converted/Demented,Nondemented / Any dementia
+Independent unit,subject,subject
+Best model (experimental),LogisticRegression (Phase 2) + sigmoid (Phase 3),LogisticRegression
+Calibration,sigmoid,raw
+Balanced accuracy (subject-level outer),0.7111,0.6889
+Sensitivity (subject-level outer),0.7000,0.6000
+Specificity (subject-level outer),0.7222,0.7778
+ROC-AUC (subject-level outer),0.8083,0.8222
+PR-AUC (subject-level outer),0.8526,0.8657
+Brier (subject-level outer),0.1902,0.1788
+Converted prediction,never predicted on outer test (4 subjects),N/A (collapsed into any-dementia)

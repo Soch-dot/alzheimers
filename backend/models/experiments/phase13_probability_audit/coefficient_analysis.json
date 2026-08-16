@@ -1,0 +1,40 @@
+{
+  "feature_order": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "coefficients": {
+    "age": -0.4862,
+    "sex": 0.6469,
+    "education_years": -1.492,
+    "mmse": -4.8901,
+    "ses": -1.3853
+  },
+  "intercept": 1.5444,
+  "imputer_medians": {
+    "age": 78.0,
+    "sex": 0.0,
+    "education_years": 14.0,
+    "mmse": 28.0,
+    "ses": 2.0
+  },
+  "scaler_scale": {
+    "age": 7.7483,
+    "sex": 0.4884,
+    "education_years": 2.9154,
+    "mmse": 4.3392,
+    "ses": 1.118
+  },
+  "scaler_mean": {
+    "age": 78.2679,
+    "sex": 0.3929,
+    "education_years": 14.2321,
+    "mmse": 26.7143,
+    "ses": 2.4911
+  },
+  "threshold": 0.4,
+  "explanation": "LR decision = sigmoid(intercept + sum(coef_j * (x_j - median_j)/scale_j)). For 74/M/10/23/1, the large negative mmse coefficient (-4.89 on standardized MMSE) dominates: mmse=23 is far below the imputed median (~28-29) after standardization, producing a large positive logit contribution; education 10 and ses 1 also carry negative coefficients (lower education/SES -> higher screening odds); male (sex=1) has a positive coefficient. The result is a logit far above 0, hence sigmoid -> ~0.99998."
+}

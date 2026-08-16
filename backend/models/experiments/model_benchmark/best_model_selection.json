@@ -1,0 +1,61 @@
+{
+  "winner": "LogisticRegression",
+  "reason": "Best defensible balanced accuracy under subject-grouped CV.",
+  "cv_balanced_accuracy": 0.5988049473901507,
+  "comparison": [
+    {
+      "model": "LogisticRegression",
+      "cv_balanced_acc_mean": 0.5988049473901507,
+      "cv_balanced_acc_std": 0.1485487419169691,
+      "cv_macro_f1_mean": 0.5277462002025118,
+      "cv_macro_recall_mean": 0.5576642274275514,
+      "cv_macro_precision_mean": 0.6055585289227372,
+      "cv_weighted_f1_mean": 0.6915059622419022,
+      "cv_accuracy_mean": 0.666538117529736,
+      "cv_log_loss_mean": 0.7377508507528536,
+      "cv_converted_recall_mean": 0.2125,
+      "cv_converted_f1_mean": 0.09019607843137253
+    },
+    {
+      "model": "XGBoost",
+      "cv_balanced_acc_mean": 0.5865565259892047,
+      "cv_balanced_acc_std": 0.08180139487593105,
+      "cv_macro_f1_mean": 0.5231306741262728,
+      "cv_macro_recall_mean": 0.5371876620340855,
+      "cv_macro_precision_mean": 0.5719672463160835,
+      "cv_weighted_f1_mean": 0.7191408450568282,
+      "cv_accuracy_mean": 0.7335656477139121,
+      "cv_log_loss_mean": 0.8304230001056696,
+      "cv_converted_recall_mean": 0.0125,
+      "cv_converted_f1_mean": 0.023529411764705882
+    },
+    {
+      "model": "SVM",
+      "cv_balanced_acc_mean": 0.5779560400640344,
+      "cv_balanced_acc_std": 0.14280620349790257,
+      "cv_macro_f1_mean": 0.4950460534235481,
+      "cv_macro_recall_mean": 0.5325142448326179,
+      "cv_macro_precision_mean": 0.515558171244749,
+      "cv_weighted_f1_mean": 0.6614624281795165,
+      "cv_accuracy_mean": 0.642166705428981,
+      "cv_log_loss_mean": 0.7507944580650944,
+      "cv_converted_recall_mean": 0.2,
+      "cv_converted_f1_mean": 0.05
+    },
+    {
+      "model": "RandomForest",
+      "cv_balanced_acc_mean": 0.5637896638191169,
+      "cv_balanced_acc_std": 0.06794345200398372,
+      "cv_macro_f1_mean": 0.5036347512661911,
+      "cv_macro_recall_mean": 0.5187218751328149,
+      "cv_macro_precision_mean": 0.5519782740072595,
+      "cv_weighted_f1_mean": 0.6891192789467712,
+      "cv_accuracy_mean": 0.7040111439200574,
+      "cv_log_loss_mean": 1.3763702811381548,
+      "cv_converted_recall_mean": 0.0125,
+      "cv_converted_f1_mean": 0.023529411764705882
+    }
+  ],
+  "hierarchy": "1) balanced accuracy 2) macro F1 / macro recall 3) converted recall/F1 4) log loss 5) accuracy / weighted F1",
+  "note": "outer 38-subject test set untouched during selection"
+}

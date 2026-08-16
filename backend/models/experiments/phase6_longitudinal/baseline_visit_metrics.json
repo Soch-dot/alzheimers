@@ -1,0 +1,78 @@
+{
+  "model": "B baseline-only (experimental baseline-visit screening)",
+  "features": [
+    "age",
+    "sex",
+    "education_years",
+    "mmse",
+    "ses"
+  ],
+  "fit_rows": 112,
+  "threshold": 0.4,
+  "metrics": {
+    "threshold": 0.4,
+    "n": 38,
+    "positive": 20,
+    "negative": 18,
+    "sensitivity": 0.6,
+    "specificity": 0.5555555555555556,
+    "balanced_accuracy": 0.5777777777777777,
+    "ppv": 0.6,
+    "npv": 0.5555555555555556,
+    "f1": 0.6,
+    "accuracy": 0.5789473684210527,
+    "roc_auc": 0.7444444444444444,
+    "pr_auc": 0.8134848564589947,
+    "brier": 0.23819462549430526,
+    "logloss": 0.6693188515078113,
+    "tp": 12,
+    "fp": 8,
+    "tn": 10,
+    "fn": 8
+  },
+  "converted_demented_breakdown": {
+    "Converted": {
+      "subjects": 4,
+      "flagged": 0,
+      "missed": 4
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 12,
+      "missed": 4
+    },
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 8,
+      "missed": 10
+    }
+  },
+  "bootstrap_ci": {
+    "sensitivity": {
+      "mean": 0.5982342552246448,
+      "ci95_lo": 0.375,
+      "ci95_hi": 0.8181818181818182
+    },
+    "specificity": {
+      "mean": 0.5528881378005502,
+      "ci95_lo": 0.3181818181818182,
+      "ci95_hi": 0.782608695652174
+    },
+    "balanced_accuracy": {
+      "mean": 0.5755611965125975,
+      "ci95_lo": 0.41593910115649246,
+      "ci95_hi": 0.7368421052631579
+    },
+    "ppv": {
+      "mean": 0.5959778365335685,
+      "ci95_lo": 0.375,
+      "ci95_hi": 0.8095238095238095
+    },
+    "npv": {
+      "mean": 0.5550522391981012,
+      "ci95_lo": 0.3157894736842105,
+      "ci95_hi": 0.7894736842105263
+    }
+  },
+  "note": "experimental baseline-visit screening; label is subject's constant group (final diagnosis)."
+}

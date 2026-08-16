@@ -1,0 +1,69 @@
+{
+  "mode": "A baseline screening (earliest visit, MR Delay==0)",
+  "threshold": 0.4,
+  "metrics": {
+    "threshold": 0.4,
+    "n": 38,
+    "positive": 20,
+    "negative": 18,
+    "sensitivity": 0.6,
+    "specificity": 0.6111111111111112,
+    "balanced_accuracy": 0.6055555555555556,
+    "ppv": 0.631578947368421,
+    "npv": 0.5789473684210527,
+    "f1": 0.6153846153846154,
+    "accuracy": 0.6052631578947368,
+    "roc_auc": 0.7388888888888889,
+    "pr_auc": 0.8080693504082799,
+    "brier": 0.2381126107261738,
+    "logloss": 0.6743299582174366,
+    "tp": 12,
+    "fp": 7,
+    "tn": 11,
+    "fn": 8
+  },
+  "bootstrap_ci": {
+    "sensitivity": {
+      "mean": 0.5982342552246448,
+      "ci95_lo": 0.375,
+      "ci95_hi": 0.8181818181818182
+    },
+    "specificity": {
+      "mean": 0.6080480483904268,
+      "ci95_lo": 0.375,
+      "ci95_hi": 0.8260869565217391
+    },
+    "balanced_accuracy": {
+      "mean": 0.6031411518075358,
+      "ci95_lo": 0.4460227272727273,
+      "ci95_hi": 0.763157894736842
+    },
+    "ppv": {
+      "mean": 0.6272298314018475,
+      "ci95_lo": 0.4,
+      "ci95_hi": 0.8421052631578947
+    },
+    "npv": {
+      "mean": 0.5783601375820403,
+      "ci95_lo": 0.35286764705882356,
+      "ci95_hi": 0.8095238095238095
+    }
+  },
+  "breakdown": {
+    "Nondemented": {
+      "subjects": 18,
+      "flagged": 7,
+      "missed": 11
+    },
+    "Converted": {
+      "subjects": 4,
+      "flagged": 0,
+      "missed": 4
+    },
+    "Demented": {
+      "subjects": 16,
+      "flagged": 12,
+      "missed": 4
+    }
+  }
+}
