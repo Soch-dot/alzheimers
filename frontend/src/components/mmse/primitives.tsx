@@ -30,10 +30,10 @@ export const ExaminerInstructions: React.FC<ExaminerInstructionsProps> = ({ chil
   if (mode === 'patient') return null;
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5">
-      <p className="text-xs md:text-[13px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 mb-2">
+      <p className="text-sm md:text-[15px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 mb-2">
         Examiner instructions <span className="normal-case tracking-normal text-gray-500">— for the examiner, not the patient</span>
       </p>
-      <div className="text-[15px] text-gray-300 leading-relaxed">{children}</div>
+      <div className="text-[15px] md:text-base text-gray-300 leading-relaxed">{children}</div>
     </div>
   );
 };
@@ -50,7 +50,7 @@ export const helperTextClass =
   'text-[13px] leading-relaxed';
 
 const labelClass =
-  'text-[13px] md:text-sm font-semibold uppercase tracking-[0.08em] mb-2';
+  'text-sm font-semibold uppercase tracking-[0.08em] mb-2';
 
 // ---------------------------------------------------------------------------
 // Section navigation (Enter key): the Next button and the Enter key share one
@@ -254,7 +254,7 @@ export const MicButton: React.FC<MicButtonProps> = ({ listening, onToggle }) => 
     onClick={onToggle}
     aria-label={listening ? 'Stop speech input' : 'Start speech input'}
     title={listening ? 'Stop speech input' : 'Start speech input'}
-    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 ${
+    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold border transition-all duration-200 ${
       listening
         ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
@@ -676,7 +676,7 @@ export const SectionShell: React.FC<SectionShellProps> = ({
             <h3 className="text-xl md:text-2xl font-semibold text-white tracking-tight">{title}</h3>
             {kind && (
               <span
-                className={`inline-block mt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] px-2 py-0.5 rounded-md border ${
+                className={`inline-block mt-1.5 text-[11px] md:text-[13px] font-semibold uppercase tracking-[0.08em] px-2 py-0.5 rounded-md border ${
                   kind === 'ai'
                     ? 'text-blue-300 bg-blue-500/10 border-blue-400/20'
                     : 'text-amber-300 bg-amber-500/10 border-amber-400/20'

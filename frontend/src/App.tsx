@@ -232,7 +232,7 @@ function App() {
 
   return (
     <AssessmentModeContext.Provider value={mode}>
-      <Layout>
+      <Layout compactHero={phase === 'form'}>
         <AnimatePresence>
           {error && (
             <ErrorMessage
@@ -279,22 +279,18 @@ function App() {
             </div>
           </div>
         ) : (
-          /* Analysis phase: form (left) + result (right) composition. */
-          <div className="w-full flex justify-center mt-10 px-6">
-            <div className="w-full max-w-[1350px] flex flex-col lg:flex-row items-start justify-between gap-12">
+          /* Analysis phase: form (left) + result (right) composition. Local full-bleed
+             so the analysis row can exceed the global max-w-7xl while staying centered.
+             Auto width + negative margins expand past the Layout padding to the
+             viewport; the inner max caps at 1400px (or viewport minus a safe margin). */
+          <div className="flex justify-center mt-10 lg:-mt-11 lg:-mx-[max(0px,calc(50vw-600px))] lg:px-10">
+            <div className="w-full max-w-[min(1400px,calc(100vw-2.5rem))] grid grid-cols-1 xl:grid-cols-[minmax(460px,520px)_minmax(0,1fr)] gap-12 items-start">
 
               {/* Left: analysis form */}
-              <div className="flex-1 max-w-[520px] w-full">
+              <div className="w-full min-w-0">
                 <FormPanel onSubmit={handleSubmit}>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-7 flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
-                        MMSE Score
-                      </p>
-                      <p className="text-lg font-semibold text-white mt-0.5">
-                        {mmseScore} / 30
-                      </p>
-                    </div>
+                  {/* Navigation row (above the MMSE Score card) */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                     <button
                       type="button"
                       onClick={handleBackToSummary}
@@ -316,6 +312,17 @@ function App() {
                     >
                       Restart Assessment
                     </button>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-7 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
+                        MMSE Score
+                      </p>
+                      <p className="text-lg font-semibold text-white mt-0.5">
+                        {mmseScore} / 30
+                      </p>
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-7">
@@ -346,7 +353,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="pt-12 border-t border-white/10">
+                  <div className="pt-10 border-t border-white/10">
                     <AnalyzeButton
                       onClick={handleAnalyze}
                       loading={loading}
@@ -357,7 +364,7 @@ function App() {
               </div>
 
               {/* Right: Results */}
-              <div className="flex-1 max-w-[520px] w-full lg:sticky lg:top-10 lg:h-fit">
+              <div className="w-full min-w-0 xl:sticky xl:top-10 xl:h-fit">
                 {loading ? (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.96 }}

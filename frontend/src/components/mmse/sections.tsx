@@ -116,13 +116,13 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({
       {examinerView ? (
         <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5 space-y-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80">
+            <p className="text-sm md:text-[15px] font-semibold uppercase tracking-[0.08em] text-blue-300/80">
               Assessment location{' '}
               <span className="normal-case tracking-normal text-gray-500">
                 — for the examiner, not the patient
               </span>
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-[13px] md:text-sm text-gray-500 mt-1">
               Enter where this assessment is taking place. These values are the
               reference answers the AI uses to evaluate the patient&apos;s responses.
             </p>
@@ -130,7 +130,7 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {LOCATION_FIELDS.map((field) => (
               <div key={field.key}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">
+                <p className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">
                   {field.label}
                 </p>
                 <input
@@ -148,7 +148,7 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({
             ))}
           </div>
           {locationIncomplete && (
-            <p className="text-xs text-amber-300/80">
+            <p className="text-[13px] text-amber-300/80">
               Finish setting the assessment location — all five fields are required
               before the assessment can continue.
             </p>
@@ -156,7 +156,7 @@ export const OrientationPlaceSection: React.FC<SectionProps> = ({
         </div>
       ) : (
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
             {allResponded
               ? 'Pending examiner verification'
               : 'Examiner verification required to score'}
@@ -292,7 +292,7 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
       <div>
         <p className={questionTextClass}>Spell the word WORLD backwards</p>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-[13px] text-gray-500 mt-1">
           Record the full response. Each letter is scored in its position during the
           batch assessment.
         </p>
@@ -329,7 +329,7 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
               <div key={index} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
                 <div className="mb-2">
                   <p className={questionTextClass}>Letter {index + 1}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-[13px] text-gray-500">
                     Expected: {letter}
                     {letterItem.response ? ` · Recorded: ${letterItem.response}` : ''}
                   </p>
@@ -509,11 +509,11 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, on
           >
             {examinerView && (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+                <p className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
                   {slot.key === 'watch' ? 'Object 1' : 'Object 2'}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-xs text-gray-500">Object:</label>
+                  <label className="text-[13px] text-gray-500">Object:</label>
                   <select
                     value={object.id}
                     onChange={(event) =>
@@ -542,7 +542,7 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, on
               />
               <p className={questionTextClass}>What is this?</p>
               {examinerView && (
-                <p className="text-xs text-gray-500">Expected answer: {object.expected}</p>
+                <p className="text-[13px] text-gray-500">Expected answer: {object.expected}</p>
               )}
             </div>
 
@@ -629,7 +629,7 @@ export const ThreeStepCommandSection: React.FC<SectionProps> = ({ state, update,
           &ldquo;{THREE_STEP_COMMAND_TEXT}&rdquo;
         </p>
       </div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 pt-1">
+      <p className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.08em] text-blue-300/80 pt-1">
         Examiner observations
       </p>
       <ExaminerScoring
@@ -826,7 +826,7 @@ export const CopyingSection: React.FC<SectionProps> = ({
           />
         ) : (
           <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
+            <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-amber-300/90">
               Pending examiner verification
             </p>
             <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">

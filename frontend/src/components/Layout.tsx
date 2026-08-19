@@ -3,9 +3,10 @@ import { motion } from 'framer-motion';
 
 interface LayoutProps {
   children: React.ReactNode;
+  compactHero?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, compactHero = false }) => {
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-gray-950 via-black to-gray-900">
       {/* Dark gradient layers for depth */}
@@ -24,7 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="mb-10 md:mb-14 text-center"
         >
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold text-white mb-5 tracking-[-0.02em] leading-[1.1]">
+          <h1 className={`${compactHero ? 'text-3xl md:text-4xl lg:text-5xl mb-3' : 'text-4xl md:text-5xl lg:text-6xl mb-5'} font-semibold text-white tracking-[-0.02em] leading-[1.1]`}>
             Alzheimer's Risk
             <br />
             <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
@@ -35,7 +36,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-base md:text-lg text-gray-400 font-light tracking-wide mb-8"
+            className={`${compactHero ? 'mb-4' : 'mb-8'} text-base md:text-lg text-gray-400 font-light tracking-wide`}
           >
             Clinical data analysis using machine learning
           </motion.p>
