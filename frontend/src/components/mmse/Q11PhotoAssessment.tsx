@@ -231,24 +231,24 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`text-sm font-semibold ${ai.correct ? 'text-emerald-300' : 'text-rose-300'}`}
+            className={`text-base font-semibold ${ai.correct ? 'text-emerald-300' : 'text-rose-300'}`}
           >
             {ai.correct ? '✓ Correct response' : '✕ Incorrect response'}
           </span>
           {copying.reviewRequired && !copying.reviewed && (
-            <span className="text-xs font-semibold text-amber-300">⚠ Review required</span>
+            <span className="text-sm font-semibold text-amber-300">⚠ Review required</span>
           )}
         </div>
         <div className="flex items-center gap-4">
-          <p className="text-xs text-gray-400">
+          <p className="text-sm text-gray-400">
             AI confidence: {Math.round(ai.confidence * 100)}%
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-gray-500">
             Score: {effective === null ? '—' : effective ? '1' : '0'} / 1
           </p>
         </div>
         {ai.reason && (
-          <p className="text-xs text-gray-500 italic">“{ai.reason}”</p>
+          <p className="text-sm text-gray-500 italic">“{ai.reason}”</p>
         )}
         {copying.reviewRequired && !copying.reviewed ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -276,7 +276,7 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
               <button
                 type="button"
                 onClick={() => setShowManual((v) => !v)}
-                className="text-xs text-gray-500 hover:text-white transition-colors"
+                className="text-sm text-gray-500 hover:text-white transition-colors"
               >
                 {showManual ? 'Hide override' : 'Review / Override'}
               </button>
@@ -319,7 +319,7 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+        <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
           Patient drawing
         </p>
 
@@ -352,7 +352,7 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
         ) : (
           <div className="space-y-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
                 Photo preview
               </p>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
@@ -369,10 +369,10 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
                 )}
               </div>
               {copying.previewName && (
-                <p className="text-[11px] text-gray-600 mt-1.5 break-all">{copying.previewName}</p>
+                <p className="text-[13px] text-gray-600 mt-1.5 break-all">{copying.previewName}</p>
               )}
               {copying.photoInfo && (
-                <p className="text-[11px] text-gray-600 mt-1.5">
+                <p className="text-[13px] text-gray-600 mt-1.5">
                   {copying.photoInfo.original.width} × {copying.photoInfo.original.height} ·{' '}
                   {(copying.photoInfo.original.bytes / (1024 * 1024)).toFixed(1)} MB
                   {copying.photoInfo.wasOptimized
@@ -426,7 +426,7 @@ export const Q11PhotoAssessment: React.FC<Q11PhotoAssessmentProps> = ({
                 <button
                   type="button"
                   onClick={resetToEmpty}
-                  className="text-xs text-gray-500 hover:text-white transition-colors"
+                  className="text-sm text-gray-500 hover:text-white transition-colors"
                 >
                   Take another photo
                 </button>

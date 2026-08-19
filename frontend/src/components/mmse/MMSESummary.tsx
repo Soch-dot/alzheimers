@@ -311,10 +311,10 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
     >
       <GlassCard>
         <div className="text-center mb-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.12em] mb-3">
+          <p className="text-sm font-semibold text-gray-400 uppercase tracking-[0.12em] mb-3">
             AI assessment complete
           </p>
-          <p className="text-6xl font-semibold text-white tracking-tight">
+          <p className="text-5xl font-bold text-white tracking-tight">
             {total}
             <span className="text-2xl text-gray-500 font-normal"> / 30</span>
           </p>
@@ -327,8 +327,8 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
                   key={row.title}
                   className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5"
                 >
-                  <span className="text-sm text-gray-300">{row.title}</span>
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-base font-semibold text-gray-300">{row.title}</span>
+                  <span className="text-base font-semibold text-white">
                     {scores[row.key]} <span className="text-gray-500 font-normal">/ {row.max}</span>
                   </span>
                 </div>
@@ -336,7 +336,7 @@ export const MMSESummary: React.FC<MMSESummaryProps> = ({
             : null}
         </div>
 
-        <p className="text-xs text-gray-500 text-center mb-6">
+        <p className="text-sm text-gray-500 text-center mb-6">
           This score is used as one clinical feature for the risk screening. It
           is a research prototype and not a diagnosis.
         </p>
