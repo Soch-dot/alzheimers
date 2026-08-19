@@ -396,10 +396,11 @@ alzheimers_ml_project/
 ## 10. Research Context
 
 - **Dataset:** OASIS-style clinical tabular data (`backend/data/raw/Dataset.csv`), 373 rows, multi-class `Nondemented / Converted / Demented` (class imbalance: only ~37 Converted samples).
-- **CDR leakage discovery/fix:** An earlier model included CDR and reached ~89% accuracy. CDR is assigned after dementia severity is known, so it leaked the answer. Removing CDR and retraining dropped accuracy to ~76% — that lower number is the honest one.
-- **Current model metrics** (5 features, no CDR, from `clean_clinical_metrics_after_cdr_removal.json`):
-  - Accuracy 0.76; macro precision 0.86, recall 0.62, F1 0.65.
-  - Converted-class recall is weak (~0.25) due to class imbalance — a known limitation, not a clinical claim.
+- **CDR leakage discovery/fix:** An earlier model included CDR and reached ~89% accuracy. CDR is assigned after dementia severity is known, so it leaked the answer. Removing CDR and retraining dropped accuracy to ~76% in the row-level evaluation — but that 76% is also invalid because repeated visits from the same subjects appeared in both training and test sets.
+- **Current model metrics (leakage-free subject-level baseline):**
+  - Accuracy ~59.8%; balanced accuracy ~48.0%; macro F1 ~47.5%.
+  - The apparent 96.74% accuracy was produced by evaluating a Random Forest trained with a row-level split that leaked subjects across training and test; it is not a valid generalization estimate.
+  - This is a subject-level research baseline, not a clinical claim: 150 subjects total, 38 outer-test subjects, only 14 Converted subjects overall and 4 in the outer test, so Converted-class metrics are statistically unstable.
 - **Clinical consultation:** The tool is explicitly framed as a screening prototype; no diagnostic thresholds are claimed. Do not invent thresholds (e.g., "MMSE below X means Alzheimer's").
 - **Literature comparison:** README cites Standard MMSE; do not exaggerate research claims or convert planned work into completed work.
 

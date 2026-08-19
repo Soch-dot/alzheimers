@@ -61,6 +61,8 @@
     }
   },
   "notes": [
+    "INVALIDATED: this 0.76 accuracy came from a row-level train/test split (test_size 0.2, random_state 42), and repeated visits from the same subjects appeared in both training and test sets. It is not a valid generalization estimate; preserved here only as audit history.",
+    "The leakage-free subject-level Random Forest baseline achieves approximately 59.8% accuracy, with balanced accuracy approximately 48.0% and macro F1 approximately 47.5%.",
     "Post-CDR-removal performance dropped substantially versus prior benchmark metrics, which is expected if CDR was leaking diagnosis information.",
     "Converted class recall is weak at 0.25 on only 8 test examples, so this model is not clinically reliable for conversion screening yet.",
     "Current pipeline still includes StandardScaler before RandomForestClassifier; this is unnecessary for Random Forest and should be cleaned in a later task."

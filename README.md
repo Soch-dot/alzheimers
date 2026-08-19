@@ -33,7 +33,7 @@ The target is the grouped diagnosis (`group`), mapped to the three classes above
 
 An earlier version of this model included CDR (Clinical Dementia Rating) as an input. That was a mistake — CDR is assigned by clinicians *after* they've already assessed dementia severity, so using it to predict dementia is circular. The model was effectively being told the answer.
 
-After removing CDR and retraining on the five features above, accuracy dropped from ~89% to ~76%. That drop is expected. The earlier number was inflated by leakage, not real predictive skill. The current model is the honest one.
+Removing CDR was the right call: the earlier ~89% was inflated by CDR leakage, not real predictive skill. The later row-level evaluation reported approximately 76% accuracy, but that estimate is also not a valid generalization estimate — it used a row-level train/test split, so repeated visits from the same subjects appeared in both training and test sets. The honest, leakage-free subject-level baseline for this model is approximately 59.8% accuracy, with balanced accuracy approximately 48.0% and macro F1 approximately 47.5% (see below).
 
 ---
 
@@ -43,17 +43,17 @@ After removing CDR and retraining on the five features above, accuracy dropped f
 - **Input**: the five features above, no additional feature engineering.
 - **Output**: predicted class, class index, class probabilities, and a derived "detection percentage" (probability of Converted or Demented combined).
 
-### Current performance (5-feature, no CDR)
+### Current performance (leakage-free subject-level baseline)
 
 | Metric | Value |
 |---|---|
-| Accuracy | 0.76 |
-| Precision (macro) | 0.86 |
-| Recall (macro) | 0.62 |
-| F1 (macro) | 0.65 |
-| ROC-AUC | ~0.92 |
+| Accuracy | ~59.8% |
+| Balanced accuracy | ~48.0% |
+| Macro F1 | ~47.5% |
 
-Recall on the "Converted" class is weak (~0.25) because of class imbalance — only 37 of 373 samples belong to it. This is a known limitation and a target for future work: class weighting, resampling, or a larger dataset.
+These are the only currently valid performance numbers. Earlier row-level evaluation reported approximately 76% accuracy, but that estimate was invalid because repeated visits from the same subjects appeared in both training and test sets. The apparent 96.74% accuracy was produced by evaluating a Random Forest trained with a row-level split that leaked subjects across training and test; it is not a valid generalization estimate.
+
+This is a subject-level research baseline, not a clinically validated result: 150 subjects total, 38 outer-test subjects, only 14 Converted subjects overall and 4 in the outer test, so Converted-class metrics are statistically unstable. It is not prospective future-conversion prediction.
 
 The trained model is saved as `best_model.pkl` under `backend/models/`. The FastAPI backend loads it at startup.
 
