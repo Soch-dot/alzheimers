@@ -270,9 +270,10 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   }
 
   return (
-    <div className="relative w-full">
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-2">
+    <div className="relative w-full lg:flex lg:flex-col lg:h-[calc(100vh-22rem)]">
+      {/* Unified assessment header: step, controls, progress */}
+      <div className="mb-5 lg:shrink-0">
+        <div className="flex items-center justify-between gap-4 mb-2.5">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
             MMSE Assessment · {step} of {MMSE_SECTIONS.length}
           </p>
@@ -305,43 +306,48 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
         </div>
       </div>
 
-      <SectionNavigationContext.Provider value={navigationValue}>
-        <motion.div key={step} initial={false}>
-          {assessing && (
-            <div className="mb-4 flex items-center gap-3 rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3">
-              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-blue-200">Assessing MMSE… please wait.</p>
-            </div>
-          )}
-          <SectionComponent
-            state={state}
-            update={update}
-            phase={phase}
-            onRetry={() => void runBatchAssessment()}
-            onHandoffToExaminer={onHandoffToExaminer}
-          />
-        </motion.div>
+      {/* Focused section content: contained internal scroll so the page never
+          becomes one long questionnaire scroll; navigation stays visible below. */}
+      <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1.5">
+        <SectionNavigationContext.Provider value={navigationValue}>
+          <motion.div key={step} initial={false}>
+            {assessing && (
+              <div className="mb-4 flex items-center gap-3 rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3">
+                <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-blue-200">Assessing MMSE… please wait.</p>
+              </div>
+            )}
+            <SectionComponent
+              state={state}
+              update={update}
+              phase={phase}
+              onRetry={() => void runBatchAssessment()}
+              onHandoffToExaminer={onHandoffToExaminer}
+            />
+          </motion.div>
+        </SectionNavigationContext.Provider>
+      </div>
 
-        <div className="flex items-center justify-between mt-6 gap-3">
-          <button
-            type="button"
-            onClick={() => setStep((current) => Math.max(current - 1, 1))}
-            disabled={step === 1 || assessing}
-            className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Back
-          </button>
-          <p className="text-xs text-gray-500 text-center">{centerMessage}</p>
-          <button
-            type="button"
-            onClick={goToNext}
-            disabled={!navigable || assessing}
-            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
-          </button>
-        </div>
-      </SectionNavigationContext.Provider>
+      {/* Stable navigation: always reachable without scrolling to a page bottom */}
+      <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-3 lg:shrink-0">
+        <button
+          type="button"
+          onClick={() => setStep((current) => Math.max(current - 1, 1))}
+          disabled={step === 1 || assessing}
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Back
+        </button>
+        <p className="text-xs text-gray-500 text-center">{centerMessage}</p>
+        <button
+          type="button"
+          onClick={goToNext}
+          disabled={!navigable || assessing}
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
+        </button>
+      </div>
     </div>
   );
 };

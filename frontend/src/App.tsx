@@ -243,11 +243,12 @@ function App() {
         </AnimatePresence>
 
         {/* ----------- FIXED PERFECT CENTERED LAYOUT ----------- */}
-        <div className="w-full flex justify-center mt-10 px-6">
-          <div className="w-full max-w-[1350px] flex flex-col lg:flex-row items-start justify-between gap-12">
 
-            {/* Left: Mode, Assessment Details, MMSE Assessment, or Analysis */}
-            <div className="flex-1 max-w-[520px] w-full">
+        {/* Assessment flow phases (Mode / Details / MMSE): single centered column,
+            no side placeholder panels. The questionnaire owns the viewport. */}
+        {phase === 'mode' || phase === 'details' || phase === 'mmse' ? (
+          <div className="w-full flex justify-center mt-4 px-6">
+            <div className="w-full max-w-[860px]">
               {phase === 'mode' ? (
                 <AssessmentModePicker
                   selected={mode}
@@ -262,7 +263,7 @@ function App() {
                   onContinue={() => setPhase('mmse')}
                   onRestart={handleRestartAssessment}
                 />
-              ) : phase === 'mmse' ? (
+              ) : (
                 <MMSEAssessment
                   onComplete={handleMmseComplete}
                   initialStep={mmse?.step}
@@ -274,7 +275,16 @@ function App() {
                   onRestartAssessment={handleRestartAssessment}
                   onExitToDetails={() => setPhase('details')}
                 />
-              ) : (
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Analysis phase: form (left) + result (right) composition. */
+          <div className="w-full flex justify-center mt-10 px-6">
+            <div className="w-full max-w-[1350px] flex flex-col lg:flex-row items-start justify-between gap-12">
+
+              {/* Left: analysis form */}
+              <div className="flex-1 max-w-[520px] w-full">
                 <FormPanel onSubmit={handleSubmit}>
                   <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-7 flex items-center justify-between gap-4">
                     <div>
@@ -344,66 +354,29 @@ function App() {
                     />
                   </div>
                 </FormPanel>
-              )}
-            </div>
+              </div>
 
-            {/* Right: Results */}
-            <div className="flex-1 max-w-[520px] w-full lg:sticky lg:top-10 lg:h-fit">
-              {loading ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="relative bg-black/40 backdrop-blur-2xl rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/10 p-12 min-h-[600px] flex items-center justify-center"
-                >
-                  <div className="inline-block w-16 h-16 border-4 border-white/20 border-t-blue-400 rounded-full animate-spin" />
-                </motion.div>
-              ) : result ? (
-                <ResultCard result={result} />
-              ) : phase === 'mode' ? (
-                <EmptyState
-                  onAnalyze={handleAnalyze}
-                  loading={loading}
-                  title="Assessment Mode"
-                  description={
-                    <>
-                      Choose who is performing this screening to begin.
-                    </>
-                  }
-                  showAnalyze={false}
-                />
-              ) : phase === 'details' ? (
-                <EmptyState
-                  onAnalyze={handleAnalyze}
-                  loading={loading}
-                  title="Assessment Details"
-                  description={
-                    <>
-                      Enter the patient&apos;s assessment details to begin the
-                      screening.
-                    </>
-                  }
-                  showAnalyze={false}
-                />
-              ) : phase === 'mmse' ? (
-                <EmptyState
-                  onAnalyze={handleAnalyze}
-                  loading={loading}
-                  title="MMSE Assessment"
-                  description={
-                    <>
-                      Complete the assessment to generate your screening result.
-                    </>
-                  }
-                  showAnalyze={false}
-                />
-              ) : (
-                <EmptyState onAnalyze={handleAnalyze} loading={loading} />
-              )}
-            </div>
+              {/* Right: Results */}
+              <div className="flex-1 max-w-[520px] w-full lg:sticky lg:top-10 lg:h-fit">
+                {loading ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="relative bg-black/40 backdrop-blur-2xl rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/10 p-12 min-h-[600px] flex items-center justify-center"
+                  >
+                    <div className="inline-block w-16 h-16 border-4 border-white/20 border-t-blue-400 rounded-full animate-spin" />
+                  </motion.div>
+                ) : result ? (
+                  <ResultCard result={result} />
+                ) : (
+                  <EmptyState onAnalyze={handleAnalyze} loading={loading} />
+                )}
+              </div>
 
+            </div>
           </div>
-        </div>
+        )}
       </Layout>
     </AssessmentModeContext.Provider>
   );

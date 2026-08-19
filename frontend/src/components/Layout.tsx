@@ -16,15 +16,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Subtle grid pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] -z-10 opacity-20" />
       
-      <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 py-24 md:py-32">
+      <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 pt-10 pb-5 md:pt-14 md:pb-5">
         {/* Header with refined typography */}
         <motion.div
           initial={{ opacity: 0, y: -40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="mb-24 md:mb-28 text-center"
+          className="mb-10 md:mb-14 text-center"
         >
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-semibold text-white mb-6 tracking-[-0.02em] leading-[1.1]">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold text-white mb-5 tracking-[-0.02em] leading-[1.1]">
             Alzheimer's Risk
             <br />
             <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
@@ -35,7 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-lg md:text-xl text-gray-400 font-light tracking-wide mb-10"
+            className="text-base md:text-lg text-gray-400 font-light tracking-wide mb-8"
           >
             Clinical data analysis using machine learning
           </motion.p>

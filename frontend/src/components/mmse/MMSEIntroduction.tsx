@@ -36,11 +36,11 @@ export const MMSEIntroduction: React.FC<MMSEIntroductionProps> = ({ onStart, onB
 
         <div className="h-px w-24 mx-auto bg-gradient-to-r from-transparent via-white/20 to-transparent my-6" />
 
-        <p className="text-sm text-gray-300 leading-relaxed max-w-sm mx-auto">
+        <p className="text-base md:text-lg text-gray-300 leading-relaxed max-w-md mx-auto">
           This examiner-assisted assessment consists of 11 sections with a
           maximum score of 30 points.
         </p>
-        <p className="text-xs text-gray-500 mt-4 max-w-sm mx-auto">
+        <p className="text-sm md:text-base text-gray-500 mt-4 leading-relaxed max-w-md mx-auto">
           The examiner asks the questions and records the patient&apos;s responses,
           then scores everything with one AI-assisted assessment. A few
           sections are observation-based and are recorded by the examiner — AI

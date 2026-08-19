@@ -27,6 +27,7 @@ import {
   PatientResponse,
   SectionShell,
   inputClass,
+  questionTextClass,
   useSpeechRecognition,
 } from './primitives';
 import { Q11PhotoAssessment } from './Q11PhotoAssessment';
@@ -290,7 +291,7 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
       <div>
-        <p className="text-sm font-medium text-white">Spell the word WORLD backwards</p>
+        <p className={questionTextClass}>Spell the word WORLD backwards</p>
         <p className="text-xs text-gray-500 mt-1">
           Record the full response. Each letter is scored in its position during the
           batch assessment.
@@ -304,20 +305,20 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
           rightSlot={speechSupported ? micButton : undefined}
         />
         {!speechSupported && (
-          <p className="text-[11px] text-gray-500 mt-1.5">
+          <p className="text-[13px] text-gray-500 mt-1.5">
             Speech input not supported in this browser — type the response instead.
           </p>
         )}
         {listening && (
-          <p className="text-[11px] text-blue-300/80 mt-1.5">Listening… ask the patient to speak now.</p>
+          <p className="text-[13px] text-blue-300/80 mt-1.5">Listening… ask the patient to speak now.</p>
         )}
-        {speechError && <p className="text-[11px] text-rose-300/80 mt-1.5">{speechError}</p>}
+        {speechError && <p className="text-[13px] text-rose-300/80 mt-1.5">{speechError}</p>}
       </div>
       {phase === 'collect' ? (
         fullResponse.trim() ? (
           <div className="pt-3 border-t border-white/10 flex items-center gap-2">
             <span className="text-emerald-300">✓</span>
-            <p className="text-xs text-gray-400">Response recorded</p>
+            <p className="text-[13px] text-gray-400">Response recorded</p>
           </div>
         ) : null
       ) : (
@@ -327,7 +328,7 @@ const SpellWorldBlock: React.FC<SectionProps> = ({ state, update, phase, onRetry
             return (
               <div key={index} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 md:p-4">
                 <div className="mb-2">
-                  <p className="text-sm font-medium text-white">Letter {index + 1}</p>
+                  <p className={questionTextClass}>Letter {index + 1}</p>
                   <p className="text-xs text-gray-500">
                     Expected: {letter}
                     {letterItem.response ? ` · Recorded: ${letterItem.response}` : ''}
@@ -539,7 +540,7 @@ export const NamingSection: React.FC<SectionProps> = ({ state, update, phase, on
                 alt="Object for the patient to name"
                 className="w-36 h-36 object-contain"
               />
-              <p className="text-sm font-medium text-white">What is this?</p>
+              <p className={questionTextClass}>What is this?</p>
               {examinerView && (
                 <p className="text-xs text-gray-500">Expected answer: {object.expected}</p>
               )}
@@ -697,7 +698,7 @@ export const ReadingSection: React.FC<SectionProps> = ({ state, update, phase })
       </div>
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
         <div>
-          <p className="text-sm font-medium text-white">
+          <p className={questionTextClass}>
             Did the patient read and perform the instruction?
           </p>
         </div>
@@ -796,7 +797,7 @@ export const CopyingSection: React.FC<SectionProps> = ({
       }
     >
       <div className="space-y-3">
-        <p className="text-sm font-medium text-white">Please copy this picture.</p>
+        <p className={questionTextClass}>Please copy this picture.</p>
         {COPYING_REFERENCE_IMAGE ? (
           <img
             src={COPYING_REFERENCE_IMAGE}

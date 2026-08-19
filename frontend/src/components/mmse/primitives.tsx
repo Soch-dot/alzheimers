@@ -30,19 +30,27 @@ export const ExaminerInstructions: React.FC<ExaminerInstructionsProps> = ({ chil
   if (mode === 'patient') return null;
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 mb-2">
+      <p className="text-xs md:text-[13px] font-semibold uppercase tracking-[0.08em] text-blue-300/80 mb-2">
         Examiner instructions <span className="normal-case tracking-normal text-gray-500">— for the examiner, not the patient</span>
       </p>
-      <div className="text-sm text-gray-300 leading-relaxed">{children}</div>
+      <div className="text-[15px] text-gray-300 leading-relaxed">{children}</div>
     </div>
   );
 };
 
 export const inputClass =
-  'w-full px-4 py-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400/50 focus:bg-white/10 transition-all duration-200 placeholder:text-gray-600';
+  'w-full px-4 py-2.5 text-base text-white bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400/50 focus:bg-white/10 transition-all duration-200 placeholder:text-gray-600';
+
+/** Shared primary question typography for every MMSE question card. */
+export const questionTextClass =
+  'text-base md:text-lg font-medium text-white leading-snug';
+
+/** Shared secondary/helper typography for MMSE question cards. */
+export const helperTextClass =
+  'text-[13px] leading-relaxed';
 
 const labelClass =
-  'text-[11px] font-semibold uppercase tracking-[0.08em] mb-2';
+  'text-[13px] md:text-sm font-semibold uppercase tracking-[0.08em] mb-2';
 
 // ---------------------------------------------------------------------------
 // Section navigation (Enter key): the Next button and the Enter key share one
@@ -295,7 +303,7 @@ export const ExaminerScoring: React.FC<ExaminerScoringProps> = ({
         >
           {label}
         </p>
-        {hint && <p className="text-xs text-gray-500 mt-0.5">{hint}</p>}
+        {hint && <p className="text-[13px] text-gray-500 mt-0.5">{hint}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
@@ -354,7 +362,7 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
 
   const manualControls = (
     <div className="flex items-center gap-2 mt-3">
-      <span className="text-xs text-gray-500">Manual score:</span>
+      <span className="text-[13px] text-gray-500">Manual score:</span>
       <button
         type="button"
         onClick={() => update({ manual: true })}
@@ -384,15 +392,15 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
   if (!item.aiScore) {
     const empty = (item.response ?? '').trim() === '';
     // Patient mode: no technical/AI failure details — keep it neutral.
-    if (!examinerView && empty) return <p className="text-xs text-gray-500">Response required</p>;
+    if (!examinerView && empty) return <p className="text-[13px] text-gray-500">Response required</p>;
     return (
       <div>
         {empty ? (
-          <p className="text-xs text-gray-500">Response required</p>
+          <p className="text-[13px] text-gray-500">Response required</p>
         ) : item.error ? (
           examinerView ? (
             <>
-              <p className="text-xs text-amber-300">AI assessment unavailable for this item.</p>
+              <p className="text-[13px] text-amber-300">AI assessment unavailable for this item.</p>
               <details className="mt-1">
                 <summary className="cursor-pointer text-[11px] text-gray-600 hover:text-gray-400 transition-colors">
                   View technical details
@@ -403,10 +411,10 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
               </details>
             </>
           ) : (
-            <p className="text-xs text-amber-300">This response could not be assessed.</p>
+            <p className="text-[13px] text-amber-300">This response could not be assessed.</p>
           )
         ) : (
-          <p className="text-xs text-gray-500">{notAssessedHint}</p>
+          <p className="text-[13px] text-gray-500">{notAssessedHint}</p>
         )}
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {examinerView && onRetry && item.manual === null && (
@@ -431,7 +439,7 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
     return (
       <div className="flex items-center gap-2">
         <span className="text-emerald-300">✓</span>
-        <p className="text-xs text-gray-400">Response assessed</p>
+        <p className="text-[13px] text-gray-400">Response assessed</p>
       </div>
     );
   }
@@ -442,17 +450,17 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
           {ai.correct ? '✓ Correct response' : '✕ Incorrect response'}
         </span>
         {item.reviewRequired && !item.reviewed && (
-          <span className="text-xs font-semibold text-amber-300">⚠ Review required</span>
+          <span className="text-[13px] font-semibold text-amber-300">⚠ Review required</span>
         )}
       </div>
       <div className="flex items-center gap-4 mt-1">
-        <p className="text-xs text-gray-400">AI confidence: {Math.round(ai.confidence * 100)}%</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-[13px] text-gray-400">AI confidence: {Math.round(ai.confidence * 100)}%</p>
+        <p className="text-[13px] text-gray-500">
           Score: {effective === null ? '—' : effective ? '1' : '0'} / 1
         </p>
       </div>
       {ai.reason && (
-        <p className="text-xs text-gray-500 mt-1.5 italic">“{ai.reason}”</p>
+        <p className="text-[13px] text-gray-500 mt-1.5 italic">“{ai.reason}”</p>
       )}
       {item.reviewRequired && !item.reviewed ? (
         <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -470,7 +478,7 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
       ) : (
         <div className="mt-2">
           {item.manual !== null ? (
-            <p className="text-xs text-gray-400">
+            <p className="text-[13px] text-gray-400">
               Examiner override:{' '}
               <span className={item.manual ? 'text-emerald-300' : 'text-rose-300'}>
                 {item.manual ? 'Correct' : 'Incorrect'}
@@ -480,7 +488,7 @@ export const AIResultPanel: React.FC<AIResultPanelProps> = ({
             <button
               type="button"
               onClick={() => setShowManual((v) => !v)}
-              className="text-xs text-gray-500 hover:text-white transition-colors"
+              className="text-[13px] text-gray-500 hover:text-white transition-colors"
             >
               {showManual ? 'Hide override' : 'Review / Override'}
             </button>
@@ -567,14 +575,14 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
         rightSlot={speech && speechSupported && !multiline ? micButton : undefined}
       />
       {speech && !multiline && !speechSupported && (
-        <p className="text-[11px] text-gray-500 mt-1.5">
+        <p className="text-[13px] text-gray-500 mt-1.5">
           Speech input not supported in this browser — type the response instead.
         </p>
       )}
       {listening && (
-        <p className="text-[11px] text-blue-300/80 mt-1.5">Listening… ask the patient to speak now.</p>
+        <p className="text-[13px] text-blue-300/80 mt-1.5">Listening… ask the patient to speak now.</p>
       )}
-      {speechError && <p className="text-[11px] text-rose-300/80 mt-1.5">{speechError}</p>}
+      {speechError && <p className="text-[13px] text-rose-300/80 mt-1.5">{speechError}</p>}
     </div>
   );
 
@@ -583,17 +591,17 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
         {top}
         <div>
-          <p className="text-sm font-medium text-white">{question}</p>
-          {visibleHint && <p className="text-xs text-gray-500 mt-1">{visibleHint}</p>}
+          <p className={questionTextClass}>{question}</p>
+          {visibleHint && <p className={`${helperTextClass} text-gray-500 mt-1`}>{visibleHint}</p>}
         </div>
         <PatientResponse value={item.response} onChange={onResponseChange} placeholder={placeholder} />
         {phase === 'collect' && item.response.trim() ? (
           <div className="pt-3 border-t border-white/10 flex items-center gap-2">
             <span className="text-emerald-300">✓</span>
-            <p className="text-xs text-gray-400">Response recorded</p>
+            <p className="text-[13px] text-gray-400">Response recorded</p>
           </div>
         ) : null}
-        <p className="text-xs text-amber-300/80">{disabledNotice}</p>
+        <p className="text-[13px] text-amber-300/80">{disabledNotice}</p>
       </div>
     );
   }
@@ -602,20 +610,20 @@ export const AIScoredResponse: React.FC<AIScoredResponseProps> = ({
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 md:p-5 space-y-4">
       {top}
       <div>
-        <p className="text-sm font-medium text-white">{question}</p>
-        {visibleHint && <p className="text-xs text-gray-500 mt-1">{visibleHint}</p>}
+        <p className={questionTextClass}>{question}</p>
+        {visibleHint && <p className={`${helperTextClass} text-gray-500 mt-1`}>{visibleHint}</p>}
       </div>
       {responseField}
       {phase === 'collect' ? (
         item.response.trim() ? (
           <div className="pt-3 border-t border-white/10 flex items-center gap-2">
             <span className="text-emerald-300">✓</span>
-            <p className="text-xs text-gray-400">Response recorded</p>
+            <p className="text-[13px] text-gray-400">Response recorded</p>
           </div>
         ) : (
           <div className="pt-3 border-t border-white/10 flex items-center gap-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-600" />
-            <p className="text-xs text-gray-600">Response required</p>
+            <p className="text-[13px] text-gray-600">Response required</p>
           </div>
         )
       ) : (
