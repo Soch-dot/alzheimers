@@ -247,23 +247,12 @@ function App() {
         {/* Assessment flow phases (Mode / Details / MMSE): single centered column,
             no side placeholder panels. The questionnaire owns the viewport. */}
         {phase === 'mode' || phase === 'details' || phase === 'mmse' ? (
-          <div className="w-full flex justify-center mt-4 px-6">
-            <div className="w-full max-w-[860px]">
-              {phase === 'mode' ? (
-                <AssessmentModePicker
-                  selected={mode}
-                  onSelect={setMode}
-                  onContinue={() => setPhase('details')}
-                />
-              ) : phase === 'details' ? (
-                <AssessmentDetails
-                  formData={details}
-                  onChange={handleDetailsChange}
-                  onBack={() => setPhase('mode')}
-                  onContinue={() => setPhase('mmse')}
-                  onRestart={handleRestartAssessment}
-                />
-              ) : (
+          phase === 'mmse' ? (
+            /* MMSE: full-bleed local wrapper. The assessment shell spans almost the
+               whole viewport with small consistent gutters; the question content is
+               centered inside MMSEAssessment itself (readable width). */
+            <div className="flex justify-center mt-4 lg:-mx-[max(0px,calc(50vw-600px))] lg:px-4">
+              <div className="w-full">
                 <MMSEAssessment
                   onComplete={handleMmseComplete}
                   initialStep={mmse?.step}
@@ -275,9 +264,31 @@ function App() {
                   onRestartAssessment={handleRestartAssessment}
                   onExitToDetails={() => setPhase('details')}
                 />
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Mode / Details: restored centered presentation — controlled width,
+               normal surrounding margins, not stretched. */
+            <div className="w-full flex justify-center mt-4 px-6">
+              <div className="w-full max-w-[860px]">
+                {phase === 'mode' ? (
+                  <AssessmentModePicker
+                    selected={mode}
+                    onSelect={setMode}
+                    onContinue={() => setPhase('details')}
+                  />
+                ) : (
+                  <AssessmentDetails
+                    formData={details}
+                    onChange={handleDetailsChange}
+                    onBack={() => setPhase('mode')}
+                    onContinue={() => setPhase('mmse')}
+                    onRestart={handleRestartAssessment}
+                  />
+                )}
+              </div>
+            </div>
+          )
         ) : (
           /* Analysis phase: form (left) + result (right) composition. Local full-bleed
              so the analysis row can exceed the global max-w-7xl while staying centered.

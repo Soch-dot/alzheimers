@@ -202,32 +202,36 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
 
   if (step === INTRO_STEP) {
     return (
-      <MMSEIntroduction
-        onStart={() => setStep(1)}
-        onBack={onExitToDetails}
-      />
+      <div className="mx-auto w-full max-w-[860px]">
+        <MMSEIntroduction
+          onStart={() => setStep(1)}
+          onBack={onExitToDetails}
+        />
+      </div>
     );
   }
 
   if (step === SUMMARY_STEP) {
     return (
-      <MMSESummary
-        phase={phase}
-        total={total}
-        scores={scores}
-        responseCounts={responseCounts}
-        batchError={batchError}
-        needsReassessCount={pendingAssessCount}
-        errorItemCount={errorItemCount}
-        allFinalized={allFinalized}
-        pendingSections={pendingSections}
-        onAssess={() => void runBatchAssessment()}
-        onReview={jumpToReview}
-        onContinue={() => onComplete(total)}
-        onRestart={onRestartAssessment ?? handleReTake}
-        onBack={() => setStep(SUMMARY_STEP - 1)}
-        onHandoffToExaminer={onHandoffToExaminer}
-      />
+      <div className="mx-auto w-full max-w-[1250px]">
+        <MMSESummary
+          phase={phase}
+          total={total}
+          scores={scores}
+          responseCounts={responseCounts}
+          batchError={batchError}
+          needsReassessCount={pendingAssessCount}
+          errorItemCount={errorItemCount}
+          allFinalized={allFinalized}
+          pendingSections={pendingSections}
+          onAssess={() => void runBatchAssessment()}
+          onReview={jumpToReview}
+          onContinue={() => onComplete(total)}
+          onRestart={onRestartAssessment ?? handleReTake}
+          onBack={() => setStep(SUMMARY_STEP - 1)}
+          onHandoffToExaminer={onHandoffToExaminer}
+        />
+      </div>
     );
   }
 
@@ -270,45 +274,46 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
   }
 
   return (
-    <div className="relative w-full lg:flex lg:flex-col lg:h-[calc(100vh-22rem)]">
-      {/* Unified assessment header: step, controls, progress */}
-      <div className="mb-5 lg:shrink-0">
-        <div className="flex items-center justify-between gap-4 mb-2.5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
-            MMSE Assessment · {step} of {MMSE_SECTIONS.length}
-          </p>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleReTake}
-              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              Re-take MMSE
-            </button>
-            {onRestartAssessment && (
+    <div className="relative w-full">
+      {/* Centered content column: header/progress, question cards, and navigation
+          all share the same readable width, centered inside the wide MMSE shell.
+          The page scrolls normally (no internal scroll container). */}
+      <div className="mx-auto w-full max-w-[1250px]">
+        {/* Unified assessment header: step, controls, progress */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between gap-4 mb-2.5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-[0.08em]">
+              MMSE Assessment · {step} of {MMSE_SECTIONS.length}
+            </p>
+            <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={onRestartAssessment}
-                className="text-xs text-gray-500 hover:text-rose-300 transition-colors"
+                onClick={handleReTake}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
               >
-                Restart Assessment
+                Re-take MMSE
               </button>
-            )}
+              {onRestartAssessment && (
+                <button
+                  type="button"
+                  onClick={onRestartAssessment}
+                  className="text-xs text-gray-500 hover:text-rose-300 transition-colors"
+                >
+                  Restart Assessment
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"
+              initial={false}
+              animate={{ width: `${(step / MMSE_SECTIONS.length) * 100}%` }}
+              transition={{ duration: 0.4, ease: 'easeInOut' }}
+            />
           </div>
         </div>
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"
-            initial={false}
-            animate={{ width: `${(step / MMSE_SECTIONS.length) * 100}%` }}
-            transition={{ duration: 0.4, ease: 'easeInOut' }}
-          />
-        </div>
-      </div>
 
-      {/* Focused section content: contained internal scroll so the page never
-          becomes one long questionnaire scroll; navigation stays visible below. */}
-      <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1.5">
         <SectionNavigationContext.Provider value={navigationValue}>
           <motion.div key={step} initial={false}>
             {assessing && (
@@ -326,27 +331,27 @@ export const MMSEAssessment: React.FC<MMSEAssessmentProps> = ({
             />
           </motion.div>
         </SectionNavigationContext.Provider>
-      </div>
 
-      {/* Stable navigation: always reachable without scrolling to a page bottom */}
-      <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-3 lg:shrink-0">
-        <button
-          type="button"
-          onClick={() => setStep((current) => Math.max(current - 1, 1))}
-          disabled={step === 1 || assessing}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Back
-        </button>
-        <p className="text-xs text-gray-500 text-center">{centerMessage}</p>
-        <button
-          type="button"
-          onClick={goToNext}
-          disabled={!navigable || assessing}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
-        </button>
+        {/* Stable navigation: reachable at the end of the section content */}
+        <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setStep((current) => Math.max(current - 1, 1))}
+            disabled={step === 1 || assessing}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Back
+          </button>
+          <p className="text-xs text-gray-500 text-center">{centerMessage}</p>
+          <button
+            type="button"
+            onClick={goToNext}
+            disabled={!navigable || assessing}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 text-white transition-all duration-200 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {step === MMSE_SECTIONS.length ? 'View Summary' : 'Next'}
+          </button>
+        </div>
       </div>
     </div>
   );
